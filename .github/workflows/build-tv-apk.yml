@@ -25,14 +25,10 @@ jobs:
           java-version: "17"
 
       # GitHub-hosted ubuntu-latest runners come with the Android SDK
-      # already installed (ANDROID_HOME preset) — no separate setup
-      # action needed. Just make sure the exact platform/build-tools
-      # this project targets are present, since the runner's default
-      # set can lag behind.
-      - name: Ensure Android SDK platform 34 + build-tools
-        run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+      # already installed and licensed (ANDROID_HOME preset), which is
+      # enough for a standard compileSdk 34 build. Explicit SDK setup
+      # steps (a community action, then a manual sdkmanager call) both
+      # failed here, so relying on what's already on the runner instead.
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
