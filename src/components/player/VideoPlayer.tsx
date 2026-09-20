@@ -24,7 +24,7 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
   const [readyFor, setReadyFor] = useState<string | null>(null);
   const [failedFor, setFailedFor] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [pseudoFullscreen, setPseudoFullscreen] = useState(false);
+  const [canFullscreen, setCanFullscreen] = useState(false);
   const readyRef = useRef<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<FullscreenCapableElement>(null);
@@ -37,7 +37,6 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
 
   const status: "loading" | "ready" | "failed" =
     readyFor === src ? "ready" : failedFor === src ? "failed" : "loading";
-  const showFullscreenUi = isFullscreen || pseudoFullscreen;
 
   useEffect(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -61,19 +60,20 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
   }, []);
 
   useEffect(() => {
-    if (!pseudoFullscreen) return;
-
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setPseudoFullscreen(false);
-    }
-    document.addEventListener("keydown", handleKey);
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.removeEventListener("keydown", handleKey);
-      document.body.style.overflow = "";
-    };
-  }, [pseudoFullscreen]);
+    // Only offer our own fullscreen control where the real browser
+    // Fullscreen API is actually available. iOS Safari has never
+    // supported requestFullscreen() on arbitrary elements (only on a
+    // native <video> tag), and we can't reach the real <video> because
+    // it lives inside VidSrc's cross-origin iframe — so there's no
+    // honest way for us to deliver true fullscreen there. Rather than
+    // faking it with a CSS overlay (which just covers the screen
+    // without hiding the browser chrome — worse than not offering the
+    // button at all), we hide the button and let the player's own
+    // native video controls handle fullscreen on those platforms.
+    queueMicrotask(() => {
+      setCanFullscreen(typeof document !== "undefined" && document.fullscreenEnabled === true);
+    });
+  }, []);
 
   function handleLoad() {
     readyRef.current = src;
@@ -85,11 +85,6 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
   }
 
   function toggleFullscreen() {
-    if (pseudoFullscreen) {
-      setPseudoFullscreen(false);
-      return;
-    }
-
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
       return;
@@ -98,24 +93,15 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
     const el = containerRef.current;
     if (!el) return;
 
-    // iOS Safari has never supported requestFullscreen() on arbitrary
-    // elements (only on <video> tags) — and we can't reach the actual
-    // <video> because it lives inside VidSrc's cross-origin iframe. So
-    // on any browser without real support (or where the call fails),
-    // fall back to a CSS-only "fill the viewport" mode instead.
     const request =
       el.requestFullscreen?.bind(el) ??
       el.webkitRequestFullscreen?.bind(el) ??
       el.mozRequestFullScreen?.bind(el) ??
       el.msRequestFullscreen?.bind(el);
 
-    if (document.fullscreenEnabled && request) {
-      const result = request();
-      if (result && typeof (result as Promise<void>).catch === "function") {
-        (result as Promise<void>).catch(() => setPseudoFullscreen(true));
-      }
-    } else {
-      setPseudoFullscreen(true);
+    const result = request?.();
+    if (result && typeof (result as Promise<void>).catch === "function") {
+      (result as Promise<void>).catch(() => {});
     }
   }
 
@@ -123,11 +109,7 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
     <div>
       <div
         ref={containerRef}
-        className={
-          pseudoFullscreen
-            ? "fixed inset-0 z-[100] bg-black"
-            : "relative aspect-video w-full overflow-hidden rounded-lg bg-surface"
-        }
+        className="relative aspect-video w-full overflow-hidden rounded-lg bg-surface"
       >
         {status === "failed" ? (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-6 text-center">
@@ -154,19 +136,19 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
               onLoad={handleLoad}
               onError={handleError}
             />
-            {status === "ready" && (
+            {status === "ready" && canFullscreen && (
               <button
                 type="button"
                 onClick={toggleFullscreen}
-                aria-label={showFullscreenUi ? "Exit fullscreen" : "Fullscreen"}
+                aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
                 title={
-                  showFullscreenUi
+                  isFullscreen
                     ? "Exit fullscreen"
                     : "Fullscreen (player buttons can be unreliable on free streams)"
                 }
                 className="absolute bottom-3 right-3 z-20 rounded-md bg-black/70 p-2 text-white opacity-80 transition-opacity hover:opacity-100"
               >
-                {showFullscreenUi ? (
+                {isFullscreen ? (
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"
@@ -214,9 +196,11 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
             {s.label}
           </button>
         ))}
-        <span className="ml-1 hidden text-xs text-muted sm:inline">
-          Use the ⛶ button on the player for a reliable fullscreen.
-        </span>
+        {canFullscreen && (
+          <span className="ml-1 hidden text-xs text-muted sm:inline">
+            Use the ⛶ button on the player for a reliable fullscreen.
+          </span>
+        )}
       </div>
     </div>
   );
