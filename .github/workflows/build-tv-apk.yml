@@ -24,8 +24,15 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # GitHub-hosted ubuntu-latest runners come with the Android SDK
+      # already installed (ANDROID_HOME preset) — no separate setup
+      # action needed. Just make sure the exact platform/build-tools
+      # this project targets are present, since the runner's default
+      # set can lag behind.
+      - name: Ensure Android SDK platform 34 + build-tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -34,7 +41,7 @@ jobs:
 
       - name: Build debug APK
         working-directory: android-tv
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Copy APK into website
         run: cp android-tv/app/build/outputs/apk/debug/app-debug.apk public/venus-tv.apk
