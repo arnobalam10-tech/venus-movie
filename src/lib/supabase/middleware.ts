@@ -30,14 +30,14 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/auth");
+  const isLoginRoute = pathname.startsWith("/login");
   const isApiRoute = pathname.startsWith("/api");
 
   if (!user) {
     if (isApiRoute) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (!isAuthRoute) {
+    if (!isLoginRoute) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       return NextResponse.redirect(url);

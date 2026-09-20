@@ -23,7 +23,7 @@ Venus is a Netflix-style streaming site for a local WiFi business's customers. I
 | IP allow-list enforcement | **Deferred to Phase 2.** Site is open to any authenticated user in v1; the network-lockdown feature is designed but not enforced yet (see §8). |
 | Search API calls | **Server-side proxy** via Next.js API routes (`/api/search`, `/api/discover`, etc.) — keeps the TMDB key server-only and gives us a caching layer. |
 | Genre/category rows | **Dynamic**, generated from TMDB's live genre list per media type (movie genres + TV genres), not a hardcoded set. |
-| Auth requirement | **Required.** Supabase Email/Password login still gates the entire site in v1 (unauthenticated users see only the login/signup screen). This is also required for watch history to be attributable to a user. |
+| Auth requirement | **Required, admin-provisioned only.** Supabase Email/Password login gates the entire site. There is no self-signup — the `/login` page is sign-in only. Every account is created by the admin via the `/admin` panel (§9), matching how a WiFi business actually hands out access. This is also required for watch history to be attributable to a user. |
 | Branding | Site name: **Venus**. Dark mode, premium Netflix-like UI. |
 | Video source | **3 VidSrc mirrors**, labeled to the user as **Server 1 / Server 2 / Server 3**: Server 1 = `vidsrc.to` (default, auto-loaded), Server 2 = `vidsrc.me`, Server 3 = `vidsrc.xyz`. A visible server switcher lets the user change source if the default fails or is slow. |
 
@@ -42,9 +42,9 @@ Venus is a Netflix-style streaming site for a local WiFi business's customers. I
 ## 4. Authentication
 
 * Supabase Auth, Email/Password.
-* Unauthenticated visitors see only a minimalist login/signup form (dark, on-brand as "Venus").
-* Next.js middleware checks session on every route except `/login` and auth callback routes; redirects unauthenticated requests to `/login`.
-* No email verification requirement specified — default Supabase confirmation flow is acceptable unless you want it disabled for frictionless signup (open question, default: leave Supabase's default confirmation ON).
+* **No self-signup.** `/login` is sign-in only, dark/minimal, on-brand as "Venus". All accounts are created by the admin via `/admin` (§9) — the site is a closed, invite-only perk, not open registration.
+* Next.js Proxy (`src/proxy.ts`, formerly "middleware" — renamed by Next.js 16) checks session on every route except `/login`; redirects unauthenticated requests to `/login`, and unauthenticated `/api/*` requests get a 401 instead.
+* Since accounts are always admin-created via the Supabase Admin API with `email_confirm: true`, there is no email-confirmation flow to build or maintain.
 
 ---
 
@@ -128,7 +128,7 @@ Use Next.js fetch caching (`revalidate`) on these routes (e.g. 1 hour for trendi
 
 ## 7. Pages & Routes
 
-1. **`/login`** — Email/password sign-in + sign-up, dark minimalist, "Venus" branding.
+1. **`/login`** — Email/password sign-in only (no signup), dark minimalist, "Venus" branding.
 2. **`/` (Home)** — Authenticated only.
    * Hero: large banner for a trending pick (movie or TV).
    * Row: "Jump Back In" (from `watch_history`, current user).
@@ -151,15 +151,16 @@ When enabled later: Next.js middleware reads the request IP (`x-forwarded-for` b
 
 ## 9. Admin Panel (build last, after the core streaming app)
 
-The business owner needs to provision customer accounts directly (email + password) rather than relying only on self-service signup. Self-service signup on `/login` stays available too — this is an additional, admin-driven way to create accounts (e.g. handing a customer a printed login on the spot, or bulk-loading a list of accounts).
+The business owner provisions every customer account directly (email + password) — there is no self-service signup (§4). This is the only way accounts get created.
 
-* **Access control:** a new `admin_users` table (`user_id uuid references auth.users(id)`) lists which authenticated users are admins. `/admin` routes check membership server-side (service-role query) and redirect non-admins away — this is separate from, and stricter than, the general auth check in middleware.
+* **Access control:** a new `admin_users` table (`user_id uuid references auth.users(id)`) lists which authenticated users are admins. `/admin` routes check membership server-side (service-role query) and redirect non-admins away — this is separate from, and stricter than, the general auth check in the proxy.
 * **Add a single user:** form with email + password → server action calls Supabase's admin API (`supabase.auth.admin.createUser`, service-role key, server-only) to create a pre-confirmed account (no confirmation email needed since the admin is vouching for the address).
 * **CSV import:** upload a `.csv` with `email,password` columns → parsed server-side → each row created via the same admin API call → a results summary shown (created / skipped / failed per row, with reasons — e.g. duplicate email, weak password).
 * **Sample CSV download:** a static `/admin` download link/button serving a template file with the header row `email,password` and one example row, so the owner knows the exact expected format before importing.
-* **Security notes:** `/admin` and its actions are the only place `SUPABASE_SERVICE_ROLE_KEY` is used; it must never reach the client bundle. CSV upload size should be capped (e.g. a few hundred rows) and validated (valid email format, minimum password length) before any accounts are created.
+* **Users list:** the admin page also lists every account (email, created date, and password when known). Supabase never exposes a password after it's set — that's a hard technical limit, not a gap — so passwords are only shown for accounts created *through this admin panel*, which saves the plaintext password to `admin_created_credentials` at creation time specifically so the admin can retrieve and hand it out later. This is a deliberate, explicit tradeoff (a second place in the database holds a readable password) accepted because every account is admin-created anyway.
+* **Security notes:** `/admin` and its actions are the only place `SUPABASE_SERVICE_ROLE_KEY` is used; it must never reach the client bundle. CSV upload size is capped (500 rows) and validated (valid email format, minimum password length) before any accounts are created.
 
-### `admin_users` (created alongside this feature)
+### `admin_users` and `admin_created_credentials` (created alongside this feature)
 
 ```sql
 create table public.admin_users (
@@ -172,9 +173,22 @@ alter table public.admin_users enable row level security;
 create policy "Service role only"
   on public.admin_users for all
   using (false);
+
+create table public.admin_created_credentials (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  email text not null,
+  password text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.admin_created_credentials enable row level security;
+
+create policy "Service role only"
+  on public.admin_created_credentials for all
+  using (false);
 ```
 
-No client-facing policy — like `allowed_ips`, this table is only ever read from a server-side/service-role context.
+No client-facing policy on either table — like `allowed_ips`, both are only ever read from a server-side/service-role context.
 
 ---
 

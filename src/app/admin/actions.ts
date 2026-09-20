@@ -35,7 +35,7 @@ export async function addUser(
 
   try {
     const supabase = createAdminClient();
-    const { error } = await supabase.auth.admin.createUser({
+    const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -43,6 +43,12 @@ export async function addUser(
 
     if (error) {
       return { status: "error", message: error.message };
+    }
+
+    if (data.user) {
+      await supabase
+        .from("admin_created_credentials")
+        .insert({ user_id: data.user.id, email, password });
     }
   } catch {
     return { status: "error", message: "Admin features aren't configured yet." };
@@ -125,7 +131,7 @@ export async function importCsv(
       continue;
     }
 
-    const { error } = await supabase.auth.admin.createUser({
+    const { data, error } = await supabase.auth.admin.createUser({
       email: rawEmail,
       password: rawPassword,
       email_confirm: true,
@@ -139,6 +145,11 @@ export async function importCsv(
         reason: error.message,
       });
     } else {
+      if (data.user) {
+        await supabase
+          .from("admin_created_credentials")
+          .insert({ user_id: data.user.id, email: rawEmail, password: rawPassword });
+      }
       results.push({ email: rawEmail, status: "created" });
     }
   }

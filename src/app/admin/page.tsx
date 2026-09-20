@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import AddUserForm from "@/components/admin/AddUserForm";
 import CsvImportForm from "@/components/admin/CsvImportForm";
+import UsersList from "@/components/admin/UsersList";
 
 export const metadata: Metadata = { title: "Admin — Venus" };
 
@@ -30,6 +31,11 @@ export default async function AdminPage() {
           .
         </p>
         <CsvImportForm />
+      </section>
+
+      <section className="mt-10">
+        <h2 className="mb-3 text-lg font-semibold text-foreground">Users</h2>
+        <UsersList />
       </section>
     </div>
   );
