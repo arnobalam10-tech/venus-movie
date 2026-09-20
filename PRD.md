@@ -25,7 +25,8 @@ Venus is a Netflix-style streaming site for a local WiFi business's customers. I
 | Genre/category rows | **Dynamic**, generated from TMDB's live genre list per media type (movie genres + TV genres), not a hardcoded set. |
 | Auth requirement | **Required, admin-provisioned only.** Supabase Email/Password login gates the entire site. There is no self-signup — the `/login` page is sign-in only. Every account is created by the admin via the `/admin` panel (§9), matching how a WiFi business actually hands out access. This is also required for watch history to be attributable to a user. |
 | Branding | Site name: **Venus**. Dark mode, premium Netflix-like UI. |
-| Video source | **3 VidSrc mirrors**, labeled to the user as **Server 1 / Server 2 / Server 3**: Server 1 = `vidsrc.to` (default, auto-loaded), Server 2 = `vidsrc.me`, Server 3 = `vidsrc.xyz`. A visible server switcher lets the user change source if the default fails or is slow. |
+| Video source | **3 VidSrc mirrors**, labeled to the user as **Server 1 / Server 2 / Server 3**: Server 1 = `vidsrc.me` (default, auto-loaded — swapped in after real-world testing showed it's more reliable than `vidsrc.to`), Server 2 = `vidsrc.to`, Server 3 = `vidsrc.xyz`. A visible server switcher lets the user change source if the default fails or is slow. |
+| Home page discovery rows | Beyond Trending/Top Rated/New Releases/dynamic genres, the home page also has Netflix-style **"Top 10 Movies Today"** and **"Top 10 TV Shows Today"** rows (TMDB daily trending, sliced to 10, shown with large rank numerals). |
 
 ---
 
@@ -132,7 +133,7 @@ Use Next.js fetch caching (`revalidate`) on these routes (e.g. 1 hour for trendi
 2. **`/` (Home)** — Authenticated only.
    * Hero: large banner for a trending pick (movie or TV).
    * Row: "Jump Back In" (from `watch_history`, current user).
-   * Rows: "Trending Now", "Top Rated", "New Releases", plus one row per TMDB genre (dynamic, movies and TV interleaved or separate tabs — see Open Questions).
+   * Rows: "Trending Now", "Top 10 Movies Today", "Top 10 TV Shows Today" (ranked numerals, Netflix-style), "Top Rated", "New Releases", plus one row per TMDB genre (dynamic, movies and TV interleaved or separate tabs — see Open Questions).
 3. **`/search`** — Live search box (debounced), grid of results across movies + TV, each tagged with its type.
 4. **`/movie/[id]`** — VidSrc movie iframe (Server 1 default, switcher visible) up top; title/synopsis/rating/year/cast below. Writes to `watch_history` on load.
 5. **`/tv/[id]`** — Show overview, season/episode picker.

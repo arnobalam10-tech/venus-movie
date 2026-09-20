@@ -1,6 +1,6 @@
 export const VIDSRC_SERVERS = [
-  { id: 1, label: "Server 1", domain: "vidsrc.to" },
-  { id: 2, label: "Server 2", domain: "vidsrc.me" },
+  { id: 1, label: "Server 1", domain: "vidsrc.me" },
+  { id: 2, label: "Server 2", domain: "vidsrc.to" },
   { id: 3, label: "Server 3", domain: "vidsrc.xyz" },
 ] as const;
 

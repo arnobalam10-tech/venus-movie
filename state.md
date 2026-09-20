@@ -4,30 +4,30 @@ Live progress log. Updated after every response. Newest entry on top.
 
 ---
 
-### 2026-09-20 — Live on Vercel; fixed admin routing after production feedback
-**Context:** user connected Vercel themselves (imported `.env` directly) and shared the live URL: **https://venus-movie.vercel.app**. Reported sign-in "stuck" and being unable to reach `/admin` even as `admin@admin.com`; suggested a separate admin login.
+### 2026-09-21 — Netflix-style Top 10 rows, default server swap, mobile investigation
+**Context:** three requests from the user: (1) swap the default VidSrc server since "server 2 is better", (2) add curated sections like "Netflix top 10", (3) mobile UI "not fitting and not sticky".
 
-**Diagnosis (tested directly against the live URL):**
-- Opened the production site fresh: confirmed the deployed build has the latest code (sign-in only, no signup toggle).
-- Signed in as `admin@admin.com` → worked correctly, redirected to home with real data (Jump Back In, hero, etc. all rendering from production Supabase + TMDB).
-- Navigated to `/admin` directly → worked correctly, Users list populated.
-- Signed out → worked correctly, back to `/login`.
-- So the deployment itself was healthy. The user's earlier "stuck" experience was traced to two separate things: (1) they'd tested `/admin` while logged in as `nafisa@venus.com`, a non-admin self-signup account from before signups were removed — being blocked was correct, not a bug; (2) admin sign-in landed on the homepage like any other account, with no visible link to `/admin` anywhere — so it looked broken even though it technically worked if you knew to type the URL.
-
-**Fix (no separate admin login needed — the existing single-login system already knows who's an admin):**
-- Refactored `src/lib/admin.ts`: extracted `isAdminUser(userId)` as a standalone check (was previously buried inside `requireAdmin()`), so it can be reused without re-fetching the current user.
-- `src/app/login/actions.ts`: `signIn` now checks `isAdminUser()` after a successful login and redirects to `/admin` instead of `/` for admins.
-- `src/components/Header.tsx`: shows a visible "Admin" link (next to Sign out) whenever the logged-in user is an admin, so there's always a way back to the panel.
-- `src/lib/supabase/middleware.ts`: the proxy's "already logged in, visiting /login" redirect is now admin-aware too, for consistency.
-- Revoked admin access from `moazzir.ch+venustest@gmail.com` — that account had only been granted admin during this session's own Phase 9 testing and isn't meant to be a real admin; it was incidentally still marked admin in the database and would have redirected to `/admin` on sign-in, which would have been confusing.
-- **Verified all three cases live locally:** admin sign-in → lands directly on `/admin`, "Admin" link visible in header; revoked-admin account sign-in → lands on `/`, no "Admin" link, `/admin` inaccessible. `npm run build` clean.
-- Updated `plan.md` (Phase 9 gets the routing-fix note, Phase 10 marked ✅ live with the production smoke-test results and root-cause explanation).
-
-**Full app status:** live in production at https://venus-movie.vercel.app, all core features working, admin routing now matches expectations (admin lands in the admin panel, regular accounts land in the app, no separate login surface needed).
+**Done:**
+1. **Default server swapped:** reordered `VIDSRC_SERVERS` in [src/lib/vidsrc.ts](../src/lib/vidsrc.ts) — `vidsrc.me` is now "Server 1" (default, auto-loaded), `vidsrc.to` is "Server 2", `vidsrc.xyz` stays "Server 3". Verified live: default iframe src is `vidsrc.me`, plays Inception cleanly with no ad overlay (unlike the old default which had one).
+2. **Netflix-style "Top 10" rows added:**
+   - [RankedPosterCard.tsx](../src/components/RankedPosterCard.tsx) — poster with a large translucent rank numeral overlapping its left edge.
+   - [RankedRow.tsx](../src/components/RankedRow.tsx) — horizontal row wrapper for ranked items.
+   - [TopTenMoviesRow.tsx](../src/components/rows/TopTenMoviesRow.tsx) / [TopTenShowsRow.tsx](../src/components/rows/TopTenShowsRow.tsx) — TMDB daily trending (`getTrending(type, "day")`) sliced to 10, one row each for movies and TV.
+   - Wired into `src/app/page.tsx` right after "Trending Now", each independently Suspense-streamed like every other row.
+   - Verified live: both rows render with real data and large numeral badges (1, 2, 3...) correctly overlapping poster edges.
+3. **Mobile "not fitting / not sticky" — investigated thoroughly, couldn't reproduce a concrete bug:**
+   - Tested emulated 320px and 375px viewports across home, movie, TV, search, and admin pages on the live production site.
+   - No horizontal overflow anywhere (`scrollWidth` matched viewport width on every page checked).
+   - Viewport meta tag correctly set (`width=device-width, initial-scale=1`), not the classic missing-meta-tag cause.
+   - `position: sticky` on the header verified working via direct DOM inspection (stayed pinned at `top: 0` through a 9975px scroll on the home page).
+   - As a safe, worthwhile improvement regardless: bumped the header's background from `bg-background/80` to `bg-background/95` and added a shadow, so the sticky effect is visually unmistakable even over busy hero imagery (the old translucency may have made it *look* like it wasn't sticking, even though technically it was).
+   - Flagged to the user (not yet resolved with certainty) that if this persists, it's likely either a real device-specific quirk we can't emulate, or about the third-party VidSrc iframe's own embedded UI, which is outside our control.
+4. Updated `PRD.md` (§2 scope table: server swap + new Top 10 rows entry; §7 home page row list) and `plan.md` (Phase 6 server swap note, Phase 4 Top 10 rows note, Phase 8 mobile investigation writeup).
+5. `npm run lint` and `npm run build` clean throughout.
 
 **Not started yet:**
-- Haven't pushed this latest fix to GitHub yet — about to.
+- Awaiting user confirmation on whether the mobile issue is resolved, or a screenshot/specific repro so it can be pinpointed further.
 - Phase 11 (network/IP lockdown) remains deliberately deferred.
 
 **Next step:**
-- Commit and push the admin-routing fix, then confirm with the user that production now behaves as expected once Vercel redeploys.
+- Commit and push these three changes, then check with the user on the mobile issue once they've had a chance to look at the live site again.

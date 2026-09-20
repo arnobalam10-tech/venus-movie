@@ -3,6 +3,8 @@ import Hero from "@/components/Hero";
 import RowSkeleton from "@/components/RowSkeleton";
 import JumpBackInRow from "@/components/rows/JumpBackInRow";
 import TrendingRow from "@/components/rows/TrendingRow";
+import TopTenMoviesRow from "@/components/rows/TopTenMoviesRow";
+import TopTenShowsRow from "@/components/rows/TopTenShowsRow";
 import TopRatedRow from "@/components/rows/TopRatedRow";
 import NewReleasesRow from "@/components/rows/NewReleasesRow";
 import GenreRows from "@/components/rows/GenreRows";
@@ -24,6 +26,12 @@ export default function Home() {
         </Suspense>
         <Suspense fallback={<RowSkeleton title="Trending Now" />}>
           <TrendingRow />
+        </Suspense>
+        <Suspense fallback={<RowSkeleton title="Top 10 Movies Today" />}>
+          <TopTenMoviesRow />
+        </Suspense>
+        <Suspense fallback={<RowSkeleton title="Top 10 TV Shows Today" />}>
+          <TopTenShowsRow />
         </Suspense>
         <Suspense fallback={<RowSkeleton title="Top Rated" />}>
           <TopRatedRow />
