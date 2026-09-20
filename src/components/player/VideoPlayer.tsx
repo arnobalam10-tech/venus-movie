@@ -14,7 +14,9 @@ interface Props {
 const LOAD_TIMEOUT_MS = 12000;
 
 type FullscreenCapableElement = HTMLDivElement & {
-  webkitRequestFullscreen?: () => void;
+  webkitRequestFullscreen?: () => Promise<void> | void;
+  mozRequestFullScreen?: () => Promise<void> | void;
+  msRequestFullscreen?: () => Promise<void> | void;
 };
 
 export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Props) {
@@ -22,6 +24,7 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
   const [readyFor, setReadyFor] = useState<string | null>(null);
   const [failedFor, setFailedFor] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [pseudoFullscreen, setPseudoFullscreen] = useState(false);
   const readyRef = useRef<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<FullscreenCapableElement>(null);
@@ -34,6 +37,7 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
 
   const status: "loading" | "ready" | "failed" =
     readyFor === src ? "ready" : failedFor === src ? "failed" : "loading";
+  const showFullscreenUi = isFullscreen || pseudoFullscreen;
 
   useEffect(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -56,6 +60,21 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
+  useEffect(() => {
+    if (!pseudoFullscreen) return;
+
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setPseudoFullscreen(false);
+    }
+    document.addEventListener("keydown", handleKey);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = "";
+    };
+  }, [pseudoFullscreen]);
+
   function handleLoad() {
     readyRef.current = src;
     setReadyFor(src);
@@ -66,15 +85,37 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
   }
 
   function toggleFullscreen() {
-    const el = containerRef.current;
-    if (!el) return;
+    if (pseudoFullscreen) {
+      setPseudoFullscreen(false);
+      return;
+    }
 
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
-    } else if (el.requestFullscreen) {
-      el.requestFullscreen().catch(() => {});
-    } else if (el.webkitRequestFullscreen) {
-      el.webkitRequestFullscreen();
+      return;
+    }
+
+    const el = containerRef.current;
+    if (!el) return;
+
+    // iOS Safari has never supported requestFullscreen() on arbitrary
+    // elements (only on <video> tags) — and we can't reach the actual
+    // <video> because it lives inside VidSrc's cross-origin iframe. So
+    // on any browser without real support (or where the call fails),
+    // fall back to a CSS-only "fill the viewport" mode instead.
+    const request =
+      el.requestFullscreen?.bind(el) ??
+      el.webkitRequestFullscreen?.bind(el) ??
+      el.mozRequestFullScreen?.bind(el) ??
+      el.msRequestFullscreen?.bind(el);
+
+    if (document.fullscreenEnabled && request) {
+      const result = request();
+      if (result && typeof (result as Promise<void>).catch === "function") {
+        (result as Promise<void>).catch(() => setPseudoFullscreen(true));
+      }
+    } else {
+      setPseudoFullscreen(true);
     }
   }
 
@@ -82,7 +123,11 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
     <div>
       <div
         ref={containerRef}
-        className="relative aspect-video w-full overflow-hidden rounded-lg bg-surface"
+        className={
+          pseudoFullscreen
+            ? "fixed inset-0 z-[100] bg-black"
+            : "relative aspect-video w-full overflow-hidden rounded-lg bg-surface"
+        }
       >
         {status === "failed" ? (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-6 text-center">
@@ -113,11 +158,15 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
               <button
                 type="button"
                 onClick={toggleFullscreen}
-                aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-                title={isFullscreen ? "Exit fullscreen" : "Fullscreen (player buttons can be unreliable on free streams)"}
+                aria-label={showFullscreenUi ? "Exit fullscreen" : "Fullscreen"}
+                title={
+                  showFullscreenUi
+                    ? "Exit fullscreen"
+                    : "Fullscreen (player buttons can be unreliable on free streams)"
+                }
                 className="absolute bottom-3 right-3 z-20 rounded-md bg-black/70 p-2 text-white opacity-80 transition-opacity hover:opacity-100"
               >
-                {isFullscreen ? (
+                {showFullscreenUi ? (
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"

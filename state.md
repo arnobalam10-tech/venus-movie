@@ -4,30 +4,27 @@ Live progress log. Updated after every response. Newest entry on top.
 
 ---
 
-### 2026-09-21 — Added a reliable fullscreen button after diagnosing an ad-hijack on the VidSrc player
-**Context:** user reported "full screen button not working in pc" — the fullscreen control inside the video player itself wasn't working.
+### 2026-09-21 — Fixed fullscreen on mobile (iOS Safari can't fullscreen arbitrary elements)
+**Context:** user confirmed the previous fullscreen fix worked on PC, then reported it still doesn't work on phone.
 
-**Investigation:**
-- Loaded the movie page live and played the video. No visible custom control bar with a fullscreen icon appeared on hover in testing.
-- Right-clicked inside the player to probe further — this triggered a **blocked popup redirect to `offer.alibaba.com`**. That's a well-known ad-hijacking pattern some free/ad-monetized streaming embeds use: intercepting clicks anywhere on the page (not just right-click) to fire popup/redirect ads instead of the actual intended action. This almost certainly explains why their own fullscreen button doesn't work reliably — a click meant for their fullscreen control very plausibly gets hijacked by the same ad script.
-- This happens entirely inside VidSrc's cross-origin iframe content, which we have zero ability to inspect or modify (Same-Origin Policy) — not something fixable from our side directly.
-- Checked our own side first, to rule out a real bug there: confirmed via the Permissions Policy API that our iframe correctly delegates the `fullscreen` feature (`allow="autoplay; encrypted-media; picture-in-picture; fullscreen"` + `allowFullScreen` were already both present and correctly recognized by the browser).
+**Root cause:** iOS Safari has never supported `Element.requestFullscreen()` for arbitrary elements — only for native `<video>` tags, via a separate WebKit-specific API (`webkitEnterFullscreen()` on `HTMLVideoElement`). Our previous fix called `requestFullscreen()` on our own container `<div>`, which works fine on desktop and Android Chrome but is a long-standing, intentional Apple platform restriction on iPhone Safari. We also can't reach the actual `<video>` element to use the video-specific API instead, because it lives inside VidSrc's cross-origin iframe — Same-Origin Policy blocks any access to another origin's DOM, so there's no way to call the video-specific fullscreen method directly. This is a hard platform limitation, not something fixable by calling the API differently.
 
-**Fix — added our own fullscreen control that never touches VidSrc's UI:**
-- `src/components/player/VideoPlayer.tsx`: added a ⛶ button overlaid on the bottom-right of the player. It calls `requestFullscreen()` directly on our own container `<div>` (which wraps the iframe) from a genuine click on our own page — this fullscreens the whole player including whatever's inside the iframe, without ever needing to click anything inside VidSrc's own content. Toggles to an exit icon via the `fullscreenchange` event listener. Added a small hint text next to the server buttons ("Use the ⛶ button on the player for a reliable fullscreen.", hidden on mobile to save space) so users know it's there and why.
-- Wrapped `requestFullscreen()`/`exitFullscreen()` calls in `.catch(() => {})` for resilience.
+**Fix:** [src/components/player/VideoPlayer.tsx](../src/components/player/VideoPlayer.tsx) — `toggleFullscreen()` now:
+1. Tries the real Fullscreen API first, with vendor-prefixed fallbacks (`webkitRequestFullscreen`, `mozRequestFullScreen`, `msRequestFullscreen`) for broader compatibility.
+2. If unsupported (`document.fullscreenEnabled` false) or the call rejects, falls back to a CSS-only "pseudo-fullscreen" mode: the player container switches to `fixed inset-0 z-[100] bg-black`, visually filling the entire viewport. This needs no special browser permission, so it works everywhere, including iOS Safari.
+3. Same ⛶ button and click handler drive both paths — the user never sees a difference except the label mechanism. Escape key also exits the CSS fallback mode; body scroll is locked while it's active.
 
-**Verification — hit a real limitation of the testing tool itself:**
-- Clicking the new button in the automated browser tool didn't visibly enter fullscreen. Investigated directly: calling `requestFullscreen()` via the tool on our page returned `TypeError: Permissions check failed`.
-- To rule out a bug in our code, tested the *exact same call* (`document.body.requestFullscreen()`) on a totally unrelated page (`example.com`, no iframe, nothing to do with our app) in the same browser pane — it failed with the identical error. This proves the restriction is in the testing tool's own embedded preview pane (which apparently doesn't have fullscreen permission itself, so nothing rendered inside it can use the Fullscreen API, regardless of what any page does), not something specific to our implementation.
-- The code itself is the standard, MDN-documented Fullscreen API pattern and should work correctly in a real browser tab (which is what the user actually uses) — this could not be given a full green-light confirmation, only a strong logical one, since the tool itself can't verify it.
-- `npm run lint` and `npm run build` both clean.
-- Updated `plan.md` (Phase 6 entry) with the full investigation writeup, including the ad-hijack finding as a heads-up about the third-party embed's behavior.
+**Verified end-to-end in this session** (an improvement over the PC-only fix, which I could only reason about via API inspection since the testing tool's pane doesn't support real fullscreen either way):
+- Confirmed native `requestFullscreen()` rejects in this testing environment too (same as it would need to on iOS) — watched the code correctly catch that rejection and fall back to pseudo-fullscreen.
+- Screenshotted the result at both desktop and 375px mobile width: player fills the entire screen, exit icon visible bottom-right, header/nav fully covered as expected.
+- Confirmed exiting (clicking the button again) correctly reverts to the normal inline player at both sizes.
+- `npm run lint` and `npm run build` clean.
+- Updated `plan.md` (Phase 6 entry, appended to the existing fullscreen writeup) with the full root-cause and verification details.
 
 **Not started yet:**
 - Haven't pushed this fix to GitHub yet — about to.
-- Would be good to get user confirmation once deployed that the new ⛶ button actually works for them, since this couldn't be end-to-end verified here.
+- Would be good to get final confirmation from the user on their actual iPhone/Android once deployed.
 - Phase 11 (network/IP lockdown) remains deliberately deferred.
 
 **Next step:**
-- Commit and push, then ask the user to confirm the fullscreen button works once live.
+- Commit and push.
