@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Greeting from "@/components/Greeting";
 import Hero from "@/components/Hero";
 import RowSkeleton from "@/components/RowSkeleton";
 import JumpBackInRow from "@/components/rows/JumpBackInRow";
@@ -12,6 +13,10 @@ import GenreRows from "@/components/rows/GenreRows";
 export default function Home() {
   return (
     <div className="flex flex-1 flex-col">
+      <Suspense fallback={null}>
+        <Greeting />
+      </Suspense>
+
       <Suspense
         fallback={
           <div className="h-[55vh] min-h-[360px] w-full animate-pulse bg-surface sm:h-[65vh]" />

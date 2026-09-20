@@ -4,26 +4,21 @@ Live progress log. Updated after every response. Newest entry on top.
 
 ---
 
-### 2026-09-21 — Fixed fullscreen on mobile (iOS Safari can't fullscreen arbitrary elements)
-**Context:** user confirmed the previous fullscreen fix worked on PC, then reported it still doesn't work on phone.
+### 2026-09-21 — Personalized greeting banner for friends
+**Context:** user asked for a custom greeting at the top of the home page, personalized per specific named friends (ahbab, irad, moazzir, Nazifa, borno, Sinah), randomly picking one of several inside-joke lines per person on every home page visit.
 
-**Root cause:** iOS Safari has never supported `Element.requestFullscreen()` for arbitrary elements — only for native `<video>` tags, via a separate WebKit-specific API (`webkitEnterFullscreen()` on `HTMLVideoElement`). Our previous fix called `requestFullscreen()` on our own container `<div>`, which works fine on desktop and Android Chrome but is a long-standing, intentional Apple platform restriction on iPhone Safari. We also can't reach the actual `<video>` element to use the video-specific API instead, because it lives inside VidSrc's cross-origin iframe — Same-Origin Policy blocks any access to another origin's DOM, so there's no way to call the video-specific fullscreen method directly. This is a hard platform limitation, not something fixable by calling the API differently.
-
-**Fix:** [src/components/player/VideoPlayer.tsx](../src/components/player/VideoPlayer.tsx) — `toggleFullscreen()` now:
-1. Tries the real Fullscreen API first, with vendor-prefixed fallbacks (`webkitRequestFullscreen`, `mozRequestFullScreen`, `msRequestFullscreen`) for broader compatibility.
-2. If unsupported (`document.fullscreenEnabled` false) or the call rejects, falls back to a CSS-only "pseudo-fullscreen" mode: the player container switches to `fixed inset-0 z-[100] bg-black`, visually filling the entire viewport. This needs no special browser permission, so it works everywhere, including iOS Safari.
-3. Same ⛶ button and click handler drive both paths — the user never sees a difference except the label mechanism. Escape key also exits the CSS fallback mode; body scroll is locked while it's active.
-
-**Verified end-to-end in this session** (an improvement over the PC-only fix, which I could only reason about via API inspection since the testing tool's pane doesn't support real fullscreen either way):
-- Confirmed native `requestFullscreen()` rejects in this testing environment too (same as it would need to on iOS) — watched the code correctly catch that rejection and fall back to pseudo-fullscreen.
-- Screenshotted the result at both desktop and 375px mobile width: player fills the entire screen, exit icon visible bottom-right, header/nav fully covered as expected.
-- Confirmed exiting (clicking the button again) correctly reverts to the normal inline player at both sizes.
-- `npm run lint` and `npm run build` clean.
-- Updated `plan.md` (Phase 6 entry, appended to the existing fullscreen writeup) with the full root-cause and verification details.
+**Done:**
+- Since accounts only have an email (no display-name field, and adding one would mean a schema change + admin UI work for a lightweight fun feature), matched by checking whether the logged-in user's email contains each person's name as a substring — practical given accounts are admin-created and will very likely use the person's name in the email.
+- [src/lib/greetings.ts](../src/lib/greetings.ts): a `GREETINGS` list, each entry a person's match keyword(s) + their list of lines exactly as given, plus a generated set for "borno" (asked for playful roast lines about living in India, kept in the same lighthearted Banglish tone as the others — cricket/Bollywood/traffic jokes, nothing mean-spirited). Included a dual match (`nazifa`/`nafisa`) since the existing `nafisa@venus.com` test account is spelled differently from "Nazifa" in the request but is almost certainly the same person.
+- `getGreetingForEmail(email)`: case-insensitive substring match, returns a random line from that person's list, or `null` if the email matches nobody (so real customers see nothing extra).
+- [src/components/Greeting.tsx](../src/components/Greeting.tsx): small async server component, reads the current user via Supabase, renders a thin bar at the very top of the page (above the hero) if there's a match, renders nothing otherwise. Random pick happens server-side on every render, so it's naturally different "every time they visit home" with zero client JS.
+- Wired into `src/app/page.tsx`, first thing in the page, wrapped in its own `Suspense` for consistency with the rest of the home page's streaming pattern.
+- **Verified live:** signed in as the `moazzir.ch+venustest@gmail.com` test account (matches "moazzir") — banner showed "20ta Aud patha?" on first load, "kire Australian Kamla" on a reload, confirming both the match and the randomization work. Signed in as `admin@admin.com` (no match) — no banner appeared, hero renders normally. `npm run lint` and `npm run build` clean, no server errors.
+- Updated `plan.md` (Phase 4 entry) with the implementation summary.
 
 **Not started yet:**
-- Haven't pushed this fix to GitHub yet — about to.
-- Would be good to get final confirmation from the user on their actual iPhone/Android once deployed.
+- Haven't pushed this yet — about to.
+- The friends named (ahbab, irad, borno, Sinah) don't have accounts yet — their greetings will start showing automatically once the admin creates accounts for them with matching emails, no further code changes needed.
 - Phase 11 (network/IP lockdown) remains deliberately deferred.
 
 **Next step:**
