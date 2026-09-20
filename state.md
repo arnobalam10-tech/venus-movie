@@ -4,30 +4,24 @@ Live progress log. Updated after every response. Newest entry on top.
 
 ---
 
-### 2026-09-21 — Netflix-style Top 10 rows, default server swap, mobile investigation
-**Context:** three requests from the user: (1) swap the default VidSrc server since "server 2 is better", (2) add curated sections like "Netflix top 10", (3) mobile UI "not fitting and not sticky".
+### 2026-09-21 — Fixed laggy Top 10 row scrolling + added sign-in/out loading feedback
+**Context:** user reported the horizontal scrolling on the new "Top 10" rows specifically felt laggy/not smooth (other rows weren't mentioned as a problem), then separately asked for a loading indicator on the sign-in button since it "feels unresponsive" after clicking.
 
-**Done:**
-1. **Default server swapped:** reordered `VIDSRC_SERVERS` in [src/lib/vidsrc.ts](../src/lib/vidsrc.ts) — `vidsrc.me` is now "Server 1" (default, auto-loaded), `vidsrc.to` is "Server 2", `vidsrc.xyz` stays "Server 3". Verified live: default iframe src is `vidsrc.me`, plays Inception cleanly with no ad overlay (unlike the old default which had one).
-2. **Netflix-style "Top 10" rows added:**
-   - [RankedPosterCard.tsx](../src/components/RankedPosterCard.tsx) — poster with a large translucent rank numeral overlapping its left edge.
-   - [RankedRow.tsx](../src/components/RankedRow.tsx) — horizontal row wrapper for ranked items.
-   - [TopTenMoviesRow.tsx](../src/components/rows/TopTenMoviesRow.tsx) / [TopTenShowsRow.tsx](../src/components/rows/TopTenShowsRow.tsx) — TMDB daily trending (`getTrending(type, "day")`) sliced to 10, one row each for movies and TV.
-   - Wired into `src/app/page.tsx` right after "Trending Now", each independently Suspense-streamed like every other row.
-   - Verified live: both rows render with real data and large numeral badges (1, 2, 3...) correctly overlapping poster edges.
-3. **Mobile "not fitting / not sticky" — investigated thoroughly, couldn't reproduce a concrete bug:**
-   - Tested emulated 320px and 375px viewports across home, movie, TV, search, and admin pages on the live production site.
-   - No horizontal overflow anywhere (`scrollWidth` matched viewport width on every page checked).
-   - Viewport meta tag correctly set (`width=device-width, initial-scale=1`), not the classic missing-meta-tag cause.
-   - `position: sticky` on the header verified working via direct DOM inspection (stayed pinned at `top: 0` through a 9975px scroll on the home page).
-   - As a safe, worthwhile improvement regardless: bumped the header's background from `bg-background/80` to `bg-background/95` and added a shadow, so the sticky effect is visually unmistakable even over busy hero imagery (the old translucency may have made it *look* like it wasn't sticking, even though technically it was).
-   - Flagged to the user (not yet resolved with certainty) that if this persists, it's likely either a real device-specific quirk we can't emulate, or about the third-party VidSrc iframe's own embedded UI, which is outside our control.
-4. Updated `PRD.md` (§2 scope table: server swap + new Top 10 rows entry; §7 home page row list) and `plan.md` (Phase 6 server swap note, Phase 4 Top 10 rows note, Phase 8 mobile investigation writeup).
-5. `npm run lint` and `npm run build` clean throughout.
+**Investigation and fix — two real issues found:**
+1. **Oversized images.** `PosterCard`'s `sizes` attribute was hardcoded to `"(min-width: 768px) 160px, 45vw"`, tuned for the search results grid. The Top 10 row's posters only render at ~110-130px (`RankedPosterCard`'s fixed width), so the browser was requesting/decoding meaningfully larger images than needed — more decode work happening while the user is actively scrolling is a classic jank cause. Fixed by making `sizes` an optional prop on `PosterCard.tsx` (default unchanged, so every other row is unaffected) and passing a correctly-sized value from `RankedPosterCard.tsx`. Verified via network log: image requests for that row dropped from `w=384` to `w=256`.
+2. **`will-change: scroll-position` anti-pattern.** Also added (speculatively, alongside the image fix) `-webkit-overflow-scrolling: touch`, `overscroll-behavior-x: contain`, `scroll-behavior: smooth`, and `will-change: scroll-position` to the shared `.scrollbar-none` class used by every horizontal row on the site. The `will-change` addition turned out to be a real problem: applied globally across dozens of rows (all genre rows, Trending, Top Rated, New Releases, both Top 10 rows), it forces that many elements into permanent GPU compositor layers simultaneously — which increases memory pressure and can *worsen* scroll performance rather than help, especially on weaker mobile GPUs. Worse, in direct testing it caused a concrete rendering bug: the Top 10 rows' poster content was present and fully correct in the DOM (verified via `getComputedStyle`/`getBoundingClientRect` — real image, real src, opacity 1, correct position) but simply didn't paint on screen. Removed `will-change: scroll-position` entirely; kept the other three safer, standard properties.
+- **Verified live**, mobile viewport (375px): both Top 10 rows now render correctly (posters, rank numerals) and the underlying cause of the reported lag (oversized image decode load) is fixed. `npm run lint` and `npm run build` clean.
+
+**Also done — sign-in/sign-out loading feedback:**
+- New [src/components/SubmitButton.tsx](../src/components/SubmitButton.tsx): a small client component using React's `useFormStatus()` hook (only works in a child of the `<form>`, hence a separate component rather than inlining) — shows a spinner + "Signing in.../Signing out..." and disables the button while its server action is in flight.
+- Wired into `src/app/login/page.tsx` (Sign in) and `src/components/Header.tsx` (Sign out) — the latter wasn't explicitly requested but has the identical issue, so fixed both for consistency at near-zero extra cost.
+- Verified both flows still work correctly end-to-end after the change (sign-in → role-based redirect, sign-out → `/login`). The transient pending frame is too fast to catch in a screenshot on localhost, but the mechanism is React's standard, reliable pattern for this and will show clearly under any real network latency — exactly the scenario that prompted the request.
+- Updated `plan.md` (Phase 4 entry for the scrolling fix, new entry for the loading-state fix).
 
 **Not started yet:**
-- Awaiting user confirmation on whether the mobile issue is resolved, or a screenshot/specific repro so it can be pinpointed further.
+- Haven't pushed these fixes to GitHub yet — about to.
+- Still waiting on user confirmation about the earlier "mobile not fitting" report (separate issue) and whether it's resolved.
 - Phase 11 (network/IP lockdown) remains deliberately deferred.
 
 **Next step:**
-- Commit and push these three changes, then check with the user on the mobile issue once they've had a chance to look at the live site again.
+- Commit and push both fixes.

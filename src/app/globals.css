@@ -28,6 +28,9 @@ body {
 .scrollbar-none {
   scrollbar-width: none;
   -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
 }
 
 .scrollbar-none::-webkit-scrollbar {

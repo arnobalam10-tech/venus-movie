@@ -2,7 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { type MediaItem, posterUrl, detailHref } from "@/lib/media";
 
-export default function PosterCard({ item }: { item: MediaItem }) {
+export default function PosterCard({
+  item,
+  sizes = "(min-width: 768px) 160px, 45vw",
+}: {
+  item: MediaItem;
+  sizes?: string;
+}) {
   const href = item.href ?? detailHref(item.mediaType, item.id);
   const src = posterUrl(item.posterPath);
 
@@ -10,13 +16,7 @@ export default function PosterCard({ item }: { item: MediaItem }) {
     <Link href={href} className="group block w-full">
       <div className="relative aspect-2/3 w-full overflow-hidden rounded-lg bg-surface transition-transform duration-200 group-hover:scale-105">
         {src ? (
-          <Image
-            src={src}
-            alt={item.title}
-            fill
-            sizes="(min-width: 768px) 160px, 45vw"
-            className="object-cover"
-          />
+          <Image src={src} alt={item.title} fill sizes={sizes} className="object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center px-2 text-center text-xs text-muted">
             {item.title}

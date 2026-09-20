@@ -11,7 +11,7 @@ export default function RankedPosterCard({ rank, item }: { rank: number; item: M
         {rank}
       </span>
       <div className="w-[110px] sm:w-[130px]">
-        <PosterCard item={item} />
+        <PosterCard item={item} sizes="(min-width: 640px) 130px, 110px" />
       </div>
     </div>
   );

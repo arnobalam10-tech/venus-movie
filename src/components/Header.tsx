@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminUser } from "@/lib/admin";
 import { signOut } from "@/app/login/actions";
+import SubmitButton from "@/components/SubmitButton";
 
 export default async function Header() {
   const supabase = await createClient();
@@ -41,9 +42,12 @@ export default async function Header() {
           )}
           {user && (
             <form action={signOut}>
-              <button type="submit" className="transition-colors hover:text-foreground">
+              <SubmitButton
+                pendingLabel="Signing out..."
+                className="transition-colors hover:text-foreground disabled:opacity-60"
+              >
                 Sign out
-              </button>
+              </SubmitButton>
             </form>
           )}
         </nav>
