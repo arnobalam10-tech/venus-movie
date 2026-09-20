@@ -214,3 +214,74 @@ No client-facing policy on either table — like `allowed_ips`, both are only ev
 
 * Home page layout for mixed movie/TV rows: interleave both types per genre row, or separate "Movies" / "TV Shows" sections? **Default: interleave, tag each poster with a small type badge.**
 * Supabase email confirmation on signup: on or off? **Default: on (Supabase default).**
+
+---
+
+## 13. TV Casting (Android TV App) — planned, not yet built
+
+A companion Android TV app lets a user cast whatever they're watching on the website straight to their TV, without the TV ever needing a typed-in login. Modeled on how smart-TV apps handle "device pairing" (the same category of flow YouTube/Netflix TV apps use), not on Google Cast/Chromecast — that's a deliberate choice, explained below.
+
+### 13.1 Why not real Google Cast
+
+Real Cast (the "cast icon appears automatically" experience from YouTube/Prime) needs two things we don't have:
+
+1. **A sender-side Cast API in the browser.** iOS Safari has never implemented the Google Cast sender APIs — no cast icon, no device discovery, ever, on any browser on iOS (every iOS browser is required to run on Apple's WebKit engine underneath, so "Chrome on iPhone" doesn't get it either). Since the user wants this working from iOS Safari, real Cast is off the table regardless of how the TV app is built.
+2. **A direct, independently-fetchable media URL.** Real Cast works by the phone handing the TV a raw video URL/manifest that the TV fetches on its own. Our video isn't ours — it's a third-party VidSrc iframe embed. We have no legitimate direct stream URL to hand off, and no programmatic control over VidSrc's player (cross-origin).
+
+So instead: a **custom pairing + relay system**, built entirely on our own stack (Supabase Realtime), which works identically from any browser because it never touches an OS-level cast API at all.
+
+### 13.2 Pairing flow (replaces TV login)
+
+1. TV app launches, generates a random `device_token` (persisted locally so it survives restarts), calls `POST /api/tv/register`. Server creates a `tv_devices` row with a short numeric pairing code (e.g. 6 digits, ~10 min expiry) and returns `{ device_token, code }` to the TV.
+2. TV displays the code on screen and starts listening on a Supabase Realtime channel scoped to its `device_token`.
+3. User opens `/tv` on the website (already logged into their Venus account on their phone), types the code in.
+4. `POST /api/tv/pair` looks up the pending row by code, links it to the current `user_id`, marks it paired.
+5. TV (subscribed via Realtime) sees the row flip to paired and switches its screen from "Enter this code" to "Connected".
+6. **Pairing persists.** The TV keeps its `device_token` locally forever (until app data is cleared) and reconnects automatically on every future launch — no re-pairing needed. The phone's `/tv` tab checks for an existing paired device for the signed-in user and shows "Connected" directly, skipping the code-entry step, if one exists.
+7. v1 supports **one paired TV per account** (simplest schema/UX for a personal setup; can extend to multiple later if needed).
+
+### 13.3 Casting flow
+
+* Once paired, a **"Cast to TV"** button appears in the video player (next to the fullscreen button) on `/movie/[id]` and `/tv/[id]/[season]/[episode]`.
+* Pressing it publishes `{ mediaType, tmdbId, season?, episode? }` on the paired device's Realtime channel.
+* TV app is always listening; on receipt, it loads that title full-screen. Casting something new while already casting just replaces what's playing — no extra logic needed, the TV simply reacts to the latest message.
+* **No play/pause/seek/volume control from the phone** — descoped per product decision, since we have no reliable programmatic access to VidSrc's player to make it worthwhile.
+
+### 13.4 How the TV actually plays the video without a full login
+
+The TV app is a thin **WebView shell**, not a fully logged-in browser session. Rather than replicating cookie-based Supabase auth inside the WebView (extra complexity, extra attack surface), the TV requests a narrow, short-lived, single-purpose **view token** scoped only to displaying a specific title:
+
+* `GET /tv-embed/movie/[id]?token=...` / `GET /tv-embed/tv/[id]/[season]/[episode]?token=...` — a stripped-down page (no header, no nav, just the VidSrc iframe) that validates a signed token (HMAC, short expiry, bound to that specific `device_token`) instead of a full user session.
+* The token is minted server-side (alongside the cast message) and is only ever handed to the TV over the Realtime channel it's already authenticated to via its `device_token` — never exposed to the public.
+* This keeps the TV's access intentionally narrow: it can display exactly what's cast to it, nothing more (no browsing, no account access), which matches the product's actual needs.
+
+### 13.5 New Supabase schema
+
+```sql
+create table public.tv_devices (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  device_token text not null unique,
+  pairing_code text,
+  code_expires_at timestamptz,
+  paired_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table public.tv_devices enable row level security;
+
+create policy "Users can view their own paired device"
+  on public.tv_devices for select
+  using (auth.uid() = user_id);
+```
+
+Registration (`POST /api/tv/register`) and pairing (`POST /api/tv/pair`) happen through server-side routes using the service-role client (the TV isn't authenticated yet when it registers, and RLS above only grants read access to an already-paired owner) — same pattern as the admin panel's service-role usage.
+
+### 13.6 APK distribution
+
+* The compiled `.apk` is committed as a static file (e.g. `public/venus-tv.apk`), served directly by Vercel — a direct, stable download URL with no extra hosting needed.
+* A **"Download TV App"** button on `/login` links straight to it; clicking starts the download immediately, no extra page or store listing.
+
+### 13.7 Scope note
+
+This is a second, separate codebase (Kotlin/Android, not Next.js) with its own build toolchain. Unlike the website, it can't be iterated on and verified live in a browser — real-device testing will lean much more on the user. Build-tooling availability (Android SDK/Gradle) needs to be checked before implementation starts.
