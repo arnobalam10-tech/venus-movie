@@ -79,25 +79,24 @@ Reference: [PRD.md](PRD.md) is the source of truth for scope/decisions. This fil
 - [x] `npm run lint` and `npx tsc --noEmit` both clean; `npm run build` production build succeeds with all routes compiling.
 - **Known limitation (documented, not a bug):** VidSrc mirrors are third-party and outside our control. Server 1 (vidsrc.to) is reliable. Server 2 correctly triggers our fallback when it errors. Server 3 (vidsrc.xyz) can return a blank-but-"loaded" page for some titles — cross-origin restrictions mean we can't inspect iframe content to distinguish "blank" from "still rendering," so our timeout/error-based detection can't catch every failure mode. This matches the PRD's accepted design (§6): swap domain, same path structure, no deeper mirror-specific handling in v1.
 
-## Phase 9 — Admin Panel (build LAST, after Phases 0-8 are working)
-Per user instruction: core app comes first, admin panel is the final v1 feature before deployment.
-- [ ] Run SQL to create `admin_users` table + locked-down RLS policy (PRD §9).
-- [ ] Manually mark the business owner's own account as an admin (one-off SQL insert once they have an account).
+## Phase 9 — Admin Panel ✅ complete, verified end-to-end
+Per user instruction: core app came first, admin panel was the final v1 feature before deployment.
 - [x] Ran SQL to create `admin_users` table + locked-down RLS policy (PRD §9), via the Supabase connector.
 - [x] Marked the test account as an admin (one-off SQL insert) for testing purposes.
-- [ ] **Blocked on user:** `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` — the Supabase MCP connector deliberately only exposes publishable/anon keys, not the service role secret, so this has to come from the user directly (Supabase dashboard → Project Settings → API → `service_role` secret). Everything below is built and gracefully degrades without it (redirects away from `/admin`), but hasn't been exercised end-to-end.
-- [x] Server-side admin guard — [src/lib/admin.ts](../src/lib/admin.ts): checks `admin_users` via a service-role client (required, since RLS blocks that table entirely for anon/authenticated roles by design); returns `null` safely if the service role key isn't configured yet, rather than throwing.
-- [x] `/admin` page: protected, redirects non-admins (and gracefully redirects everyone while the service role key is unset) — [src/app/admin/page.tsx](../src/app/admin/page.tsx).
+- [x] User supplied `SUPABASE_SERVICE_ROLE_KEY` — added to `.env.local` (server-only, gitignored).
+- [x] Server-side admin guard — [src/lib/admin.ts](../src/lib/admin.ts): checks `admin_users` via a service-role client (required, since RLS blocks that table entirely for anon/authenticated roles by design); returns `null` safely if the service role key isn't configured, rather than throwing.
+- [x] `/admin` page: protected, redirects non-admins — [src/app/admin/page.tsx](../src/app/admin/page.tsx).
 - [x] "Add user" form (email + password) → server action using `supabase.auth.admin.createUser` (service role, pre-confirmed) — [src/app/admin/actions.ts](../src/app/admin/actions.ts) + [AddUserForm.tsx](../src/components/admin/AddUserForm.tsx) (React 19 `useActionState`).
 - [x] CSV import: file upload UI, server-side parse of `email,password` rows, per-row create via admin API, results summary table (created/skipped/failed + reasons) — [CsvImportForm.tsx](../src/components/admin/CsvImportForm.tsx).
 - [x] Sample CSV download link — [public/sample-users.csv](../public/sample-users.csv).
 - [x] Input validation (email regex, min 6-char password) and a 500-row upload cap before any rows are processed.
-- [x] Verified what's testable without the key: visiting `/admin` while unconfigured redirects home cleanly, no crash, no server error. **Not yet verified:** actually creating an account (single or via CSV) — needs the service role key from the user.
+- [x] **Verified live end-to-end:** single-add created a real, pre-confirmed account (checked via SQL); re-submitting the same email correctly surfaced Supabase's "already registered" error; CSV import with a mixed batch (1 valid, 1 duplicate, 1 invalid email, 1 weak password) correctly created 1 and reported the other 3 with accurate reasons. **Bug found and fixed during this testing:** the duplicate-detection regex (`/already registered/i`) didn't match Supabase's actual wording ("already **been** registered"), so duplicates were miscategorized as "failed" instead of "skipped" — fixed to `/already.*registered/i` and re-verified. Test accounts created during testing were cleaned up from Supabase afterward.
+- [x] Created the real admin login the user requested: `admin@admin.com` / `456852` (via the Supabase Auth Admin API directly, pre-confirmed) and granted it `/admin` access via `admin_users`. Verified it logs in and reaches `/admin` correctly.
 
-## Phase 10 — Deployment
-- [ ] **Blocked on user/tooling:** this environment has no `gh` or `vercel` CLI installed and no git remote configured, so pushing to GitHub and deploying to Vercel can't be done from here. Per the standing git-safety rules for this session, a commit is also not created without an explicit ask — "finish everything" was read as covering the app build, not silently committing/pushing code on the user's behalf.
-- [ ] Push repo to GitHub — needs the user to either connect a remote here (share a repo URL/auth) or push from their own machine.
-- [ ] Connect repo to Vercel, set env vars in Vercel dashboard (TMDB key, Supabase URL/anon/service-role keys).
+## Phase 10 — Deployment (in progress)
+- [x] Initial commit created and **pushed to GitHub**: [github.com/arnobalam10-tech/venus-movie](https://github.com/arnobalam10-tech/venus-movie) (user provided the repo URL and explicitly asked for the push). `git log`/`git status` confirm a clean working tree; `.env.local` was never committed (gitignored).
+- [ ] Connect the repo to Vercel and set env vars there (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `TMDB_API_KEY`, `TMDB_READ_ACCESS_TOKEN`, `NEXT_PUBLIC_SITE_URL` set to the real production URL). **Still needs the user** — no `vercel` CLI in this environment, so this has to be done via the Vercel dashboard (Import Project → pick the GitHub repo) or from the user's own machine.
+- [ ] After connecting, update `NEXT_PUBLIC_SITE_URL` (currently `http://localhost:3000`) to the real Vercel URL so Supabase's email-confirmation links point to production.
 - [ ] Deploy, smoke-test production: login, browse, search, play a movie, play a TV episode, jump back in, admin panel.
 
 ## Phase 11 (Future / Not in v1) — Network Lockdown

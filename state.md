@@ -4,30 +4,25 @@ Live progress log. Updated after every response. Newest entry on top.
 
 ---
 
-### 2026-09-20 — Admin panel built (Phase 9); Phase 10 deployment blocked, needs user action
-**Context:** continuing straight through from the previous entry per user instruction to finish all remaining phases without stopping for confirmation between them.
+### 2026-09-20 — Admin panel verified end-to-end; pushed to GitHub; real admin login created
+**Done:**
+- User supplied the Supabase service role key → added to `.env.local` (gitignored, never committed).
+- **Verified the admin panel live, end-to-end, with real Supabase writes:**
+  - Single-add: created a real pre-confirmed account, confirmed via SQL (`email_confirmed_at` set).
+  - Duplicate-email re-submit: correctly surfaced Supabase's "already registered" error inline.
+  - CSV import: uploaded a file via a `DataTransfer`-simulated file input (the browser tool has no native file-picker support) with 1 valid / 1 duplicate / 1 invalid-email / 1 weak-password row — got back 1 created, 3 failed with accurate per-row reasons.
+  - **Bug caught and fixed:** the duplicate-detection regex (`/already registered/i`) missed Supabase's actual error wording ("already **been** registered"), so duplicates showed as "failed" instead of "skipped". Fixed to `/already.*registered/i` in `src/app/admin/actions.ts`, re-tested, confirmed correct ("skipped" now shows).
+  - Cleaned up all test accounts created during this testing from Supabase afterward.
+- User asked for a real admin login: **`admin@admin.com` / `456852`**. Created directly via the Supabase Auth Admin REST API (pre-confirmed), then granted `/admin` access via an `admin_users` insert. Verified it logs in and reaches `/admin` correctly.
+- `npx tsc --noEmit` and `npm run lint` both clean after the regex fix.
+- **Committed and pushed to GitHub** at the user's request: first commit (58 files) to [github.com/arnobalam10-tech/venus-movie](https://github.com/arnobalam10-tech/venus-movie), branch `master`. Verified `.env.local` was never staged (gitignored throughout). This is the first commit made in this project — done because the user explicitly provided the repo URL and said "push to", which is the explicit ask the session's git-safety rules require.
 
-**Done (Phase 9 — Admin Panel):**
-- Created `admin_users` table + locked-down RLS policy via the Supabase connector (matches PRD §9 exactly).
-- Marked the test account (`moazzir.ch+venustest@gmail.com`) as an admin via a one-off SQL insert, for testing.
-- `src/lib/supabase/admin.ts`: service-role Supabase client (throws clearly if `SUPABASE_SERVICE_ROLE_KEY` isn't set — caught gracefully everywhere it's used).
-- `src/lib/admin.ts`: `requireAdmin()` guard — checks `admin_users` via the service-role client (required, since that table's RLS blocks all anon/authenticated reads by design), returns `null` (not a crash) if unconfigured.
-- `src/app/admin/actions.ts`: two server actions —
-  - `addUser`: validates email/password, calls `supabase.auth.admin.createUser` with `email_confirm: true` (no confirmation email needed, admin is vouching for the address).
-  - `importCsv`: parses an uploaded `email,password` CSV (skips a header row if present, caps at 500 rows), creates each account, returns a per-row created/skipped/failed summary with reasons (e.g. duplicate email).
-- `src/components/admin/AddUserForm.tsx` and `CsvImportForm.tsx`: client components using React 19's `useActionState` for inline results without full page reloads.
-- `src/app/admin/page.tsx`: the `/admin` page itself, protected by `requireAdmin()`.
-- `public/sample-users.csv`: downloadable template (`email,password` header + one example row).
-- `npm run lint`, `npx tsc --noEmit`, and `npm run build` all clean with `/admin` in the route list.
-- **Verified what's testable without the key:** visiting `/admin` while `SUPABASE_SERVICE_ROLE_KEY` is blank redirects home cleanly — no crash, no server error. This confirms the guard's graceful-degradation path works.
-- **Not yet verified:** actually creating an account (single-add or CSV import) — this needs a real service role key, which the Supabase MCP connector deliberately does not expose (only publishable/anon keys, by design, for security). This has to come from the user: Supabase dashboard → Project Settings → API → `service_role` secret.
+**Full PRD feature set is now built and verified:** auth, home page (hero/Jump Back In/Trending/Top Rated/New Releases/dynamic genre rows), search, movie + TV playback (3-server VidSrc switcher, watch history), and the admin panel (single-add + CSV import + sample download). Only remaining gap is production deployment.
 
-**Phase 10 (Deployment) — blocked, needs user action:**
-- Checked this environment: no `gh` CLI, no `vercel` CLI, no git remote configured on the repo (`git remote -v` empty). None of that can be fixed from here — it's a tooling/access gap, not a confirmation gate.
-- Per the session's standing git-safety rules, a commit is also not created without an explicit ask, so nothing has been committed yet either — "finish everything" was read as covering the app build (Phases 6-9), not silently committing/pushing code or deploying infrastructure on the user's behalf.
-- **What's needed from the user to unblock Phase 10:** either (a) push this repo to GitHub from their own machine and connect it to Vercel themselves, or (b) provide GitHub/Vercel access in this environment so it can be done here, or (c) explicitly ask for a local commit to be created as a first step.
-
-**Full app status:** every core feature from the PRD is built and browser-verified end-to-end except the two items above (admin account creation, deployment). Auth, home page (hero/Jump Back In/Trending/Top Rated/New Releases/dynamic genre rows), search, movie playback, TV playback with season/episode browsing, and the admin panel's UI/guard logic are all working.
+**Not started yet / still needs the user:**
+- **Vercel connection** — no `vercel` CLI in this environment. The user needs to either import the GitHub repo via the Vercel dashboard themselves, or do it from their own machine. Env vars to set there: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `TMDB_API_KEY`, `TMDB_READ_ACCESS_TOKEN`, and `NEXT_PUBLIC_SITE_URL` (set to the real production URL once known, so Supabase's email-confirmation links work correctly).
+- Once deployed: a production smoke test (login, browse, search, play a movie, play a TV episode, jump back in, admin panel) hasn't been run yet since there's no production URL.
+- Phase 11 (network/IP lockdown) remains deliberately deferred, per the original product decision.
 
 **Next step:**
-- Waiting on the user for: (1) the Supabase service role key to finish verifying Phase 9, and (2) direction on how to handle Phase 10 (GitHub/Vercel access, or explicit go-ahead to commit locally as a starting point).
+- Waiting on the user to connect Vercel (or ask for further help once they've done so) to complete Phase 10 and go live.
