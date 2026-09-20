@@ -117,29 +117,38 @@ Per user instruction: core app came first, admin panel was the final v1 feature 
 - [ ] "Access Denied — connect to our WiFi" screen.
 - [ ] Decide IP management approach (manual Supabase dashboard vs admin page vs CIDR — revisit with user when this phase starts).
 
-## Phase 12 — TV Casting (Android TV App) — planned, not yet built
+## Phase 12 — TV Casting (Android TV App)
 Full design rationale in PRD.md §13. Custom pairing + relay system (not real Google Cast — iOS Safari can't support that, and our video isn't a URL we control anyway). No play/pause from phone (explicitly descoped). APK gets a direct-download button on `/login`.
 
-**Web side (Next.js/Supabase):**
-- [ ] Check Android build tooling available in this environment before starting the app side (Android SDK/Gradle/JDK) — determines how much of the Android build I can do directly vs. hand off.
-- [ ] Migration: `tv_devices` table + RLS policy (PRD §13.5), via the Supabase connector.
-- [ ] `POST /api/tv/register` — service-role route: TV calls this with nothing, server creates a pending row with a random `device_token` + 6-digit `pairing_code` (~10 min expiry), returns both to the TV.
-- [ ] `POST /api/tv/pair` — authenticated route: takes `{ code }`, finds the matching pending row (not expired, not already paired), sets `user_id` + `paired_at`.
-- [ ] `GET /api/tv/status` (or similar) — authenticated: does the current user have a paired device? Used by both the `/tv` page and the "Cast to TV" button to decide whether to show themselves.
-- [ ] `/tv` page: shows "Connected" (with an unpair/forget option) if the user already has a paired device; otherwise a simple 6-digit code input that calls `/api/tv/pair`.
-- [ ] Signed short-lived "view token" helper (HMAC, bound to a specific `device_token` + title, short expiry) — minted server-side when a cast message is sent, never exposed publicly.
-- [ ] `/tv-embed/movie/[id]` and `/tv-embed/tv/[id]/[season]/[episode]` — stripped-down pages (no header/nav, just the VidSrc iframe), validate the signed view token instead of a full Supabase session.
-- [ ] "Cast to TV" button in `VideoPlayer.tsx` (next to the fullscreen button), shown only when the signed-in user has a paired device. On click: mints a view token for the current title, publishes `{ mediaType, tmdbId, season?, episode?, viewToken }` on the paired device's Supabase Realtime channel.
-- [ ] Host the compiled `.apk` as a static file (`public/venus-tv.apk`) once the Android side produces a build.
-- [ ] "Download TV App" button on `/login`, linking directly to `/venus-tv.apk`.
+**Web side (Next.js/Supabase) — ✅ built and verified end-to-end in the browser:**
+- [x] Checked Android build tooling in this environment: no Java, no Gradle, no Android SDK installed. Can't compile/run the Android app locally — see the Android section below for how this was handled instead.
+- [x] Migration: `tv_devices` table + RLS policy (PRD §13.5), via the Supabase connector. Uses polling instead of the originally-planned Realtime broadcast (see note below).
+- [x] `POST /api/tv/register` — [src/app/api/tv/register/route.ts](../src/app/api/tv/register/route.ts): creates a pending row with a random `device_token` + 6-digit `pairing_code` (10 min expiry).
+- [x] `POST /api/tv/pair` — [src/app/api/tv/pair/route.ts](../src/app/api/tv/pair/route.ts): authenticated, finds the matching unexpired pending row, links it to the current user.
+- [x] `GET /api/tv/status` — [src/app/api/tv/status/route.ts](../src/app/api/tv/status/route.ts): does the current user have a paired device? Used by `/tv` and the cast button.
+- [x] `POST /api/tv/unpair` — [src/app/api/tv/unpair/route.ts](../src/app/api/tv/unpair/route.ts): "Forget this TV", deletes the row.
+- [x] `POST /api/tv/cast` — [src/app/api/tv/cast/route.ts](../src/app/api/tv/cast/route.ts): authenticated, records what to play on the user's paired device.
+- [x] `GET /api/tv/poll` — [src/app/api/tv/poll/route.ts](../src/app/api/tv/poll/route.ts): **the TV device polls this** (no user session — authenticates via its own `device_token`) every few seconds; returns pairing status and, if something's been cast, a freshly-minted view token for it.
+- [x] `/tv` page — [src/app/tv/page.tsx](../src/app/tv/page.tsx) + [TvPairForm.tsx](../src/components/tv/TvPairForm.tsx) + [TvConnected.tsx](../src/components/tv/TvConnected.tsx): code entry or "Connected" + forget-device option.
+- [x] Signed short-lived view token helper — [src/lib/tvToken.ts](../src/lib/tvToken.ts): HMAC-SHA256, bound to `device_token` + title, 10 min expiry. New `TV_TOKEN_SECRET` env var (generated, added to `.env.local` — **needs to be added to Vercel too**, same as the service role key was).
+- [x] `/tv-embed/movie/[id]` and `/tv-embed/tv/[id]/[season]/[episode]` — [src/app/tv-embed/movie/[id]/page.tsx](../src/app/tv-embed/movie/[id]/page.tsx), [src/app/tv-embed/tv/[id]/[season]/[episode]/page.tsx](../src/app/tv-embed/tv/[id]/[season]/[episode]/page.tsx): validate the token, render just the player. Header hidden on these routes via a small `x-pathname` header threaded from the proxy to the root layout (avoided restructuring the whole route tree into groups for this one exception).
+- [x] "Cast to TV" button — [src/components/player/CastToTvButton.tsx](../src/components/player/CastToTvButton.tsx), wired into `VideoPlayer.tsx` (bottom-left, mirrors the fullscreen button at bottom-right). Only renders when the signed-in user has a paired device (checked via `/api/tv/status` on mount). Hidden inside the TV's own `/tv-embed` player via a `showCastButton={false}` prop, so the TV doesn't show a cast button to itself.
+- [x] "Download TV App" button on `/login`, linking to `/venus-tv.apk`.
+- [x] "TV" link added to the header nav (only visible when signed in).
+- [x] **Verified live end-to-end**: registered a fake device via curl (simulating the TV), paired it through `/tv`, confirmed polling correctly reflects pairing status, cast a movie from `/movie/27205` and confirmed the poll response carried a valid, verifiable view token, loaded `/tv-embed/movie/27205` with that token and confirmed it renders the player with **no header** while the normal `/movie/[id]` page still has its full header (regression check on the layout change), confirmed invalid/missing tokens are rejected, confirmed unpair correctly clears everything, and ran a full sign-out/sign-in cycle to confirm the proxy header-injection change didn't break normal auth. `npm run lint` and `npm run build` both clean.
+- **Deviation from the original plan:** built with HTTP polling (~3s interval) from the TV instead of a Supabase Realtime WebSocket subscription. Reasoning: there's no first-class, lightweight Supabase Realtime client for plain Kotlin (the officially-supported one is a fuller multiplatform SDK with more dependencies/surface area to get wrong without being able to test-compile), whereas polling only needs a single `HttpURLConnection` call the Android side already needs anyway. A few seconds of latency is imperceptible for "press cast, TV starts playing."
 
-**Android TV app (separate Kotlin project, own repo/folder):**
-- [ ] New Android TV project scaffold (minimal Compose UI: code-display screen + "Connected" screen).
-- [ ] On first launch (or if unpaired): call `/api/tv/register`, store `device_token` locally, display the pairing code.
-- [ ] Subscribe to the device's Supabase Realtime channel; on the row flipping to paired, switch to the "Connected" screen; on every future launch, reconnect directly using the stored `device_token` (skip pairing screen if already paired).
-- [ ] On receiving a cast message: load `/tv-embed/...` (with the supplied view token) full-screen in a WebView.
-- [ ] Manual test end-to-end on real hardware (can't be verified from this side the way the website has been) — pairing, casting, switching titles while already casting.
+**Android TV app — written, NOT compiled or tested (see below for why):**
+- [x] Confirmed this environment has no Java/Gradle/Android SDK — can't build or run the app the way the website was built and verified.
+- [x] Full Android Studio project written at [android-tv/](../android-tv/) — deliberately **zero third-party dependencies** beyond AndroidX core/appcompat (no Compose, no OkHttp, no coroutines; plain Views + `java.net.HttpURLConnection`), to minimize the odds of a dependency/version mismatch breaking an unverifiable first build. See [android-tv/README.md](../android-tv/README.md) for the full breakdown.
+  - `MainActivity.kt` — registers the device, shows the pairing code, polls for pairing + cast commands.
+  - `PlayerActivity.kt` — full-screen WebView pointed at `/tv-embed/...`; keeps polling in the background so casting something new while already playing switches automatically.
+  - `ApiClient.kt`, `DeviceStore.kt`, `CastInfo.kt` — small, dependency-free helpers.
+  - Manifest declares both `LAUNCHER` and `LEANBACK_LAUNCHER` categories (required for the app to show up on an Android TV home screen) plus a placeholder vector-drawable banner/icon.
+- [x] **GitHub Actions workflow** — [.github/workflows/build-tv-apk.yml](../.github/workflows/build-tv-apk.yml): builds a debug APK on every push touching `android-tv/**`, then auto-commits the result to `public/venus-tv.apk` (which Vercel then serves — that's what the login page's download button points at). This is the actual plan for producing a real, downloadable APK despite no local Android tooling being available. **This workflow itself is unverified** — I can't run GitHub Actions from here (no `gh` CLI access confirmed earlier this session) to confirm it succeeds.
+- [ ] **Needs the user**: check the Actions tab on GitHub after this gets pushed to confirm the build succeeds. If it fails, the error log will point at what needs fixing (most likely a dependency/action-version issue) — share it and it can be fixed as a normal iteration, the same as any other bug in this project.
+- [ ] Manual test end-to-end on real hardware once a working APK exists — pairing, casting, switching titles while already casting. This is on the user, as agreed ("worst case, you can't test — I'll do the testing").
 
 **Not in scope (explicitly descoped):**
-- [ ] ~~Play/pause/seek/volume control from the phone~~ — user said skip it.
-- [ ] Real Google Cast / Chromecast protocol — not achievable from iOS Safari regardless of TV app design (see PRD §13.1).
+- ~~Play/pause/seek/volume control from the phone~~ — user said skip it.
+- Real Google Cast / Chromecast protocol — not achievable from iOS Safari regardless of TV app design (see PRD §13.1).

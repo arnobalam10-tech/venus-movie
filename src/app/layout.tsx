@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
@@ -18,14 +19,18 @@ export const metadata: Metadata = {
   description: "Movies & TV shows, on us.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const headersList = await headers();
+  const pathname = headersList.get("x-pathname") ?? "";
+  const isTvEmbed = pathname.startsWith("/tv-embed");
+
   return (
     <html
       lang="en"
       className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground font-sans">
-        <Header />
+        {!isTvEmbed && <Header />}
         <main className="flex flex-1 flex-col">{children}</main>
       </body>
     </html>

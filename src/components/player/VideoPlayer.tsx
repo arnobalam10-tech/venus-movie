@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { VIDSRC_SERVERS, vidsrcMovieUrl, vidsrcTvUrl } from "@/lib/vidsrc";
 import type { MediaType } from "@/lib/tmdb";
+import CastToTvButton from "@/components/player/CastToTvButton";
 
 interface Props {
   mediaType: MediaType;
   tmdbId: number;
   season?: number;
   episode?: number;
+  showCastButton?: boolean;
 }
 
 const LOAD_TIMEOUT_MS = 12000;
@@ -19,7 +21,13 @@ type FullscreenCapableElement = HTMLDivElement & {
   msRequestFullscreen?: () => Promise<void> | void;
 };
 
-export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Props) {
+export default function VideoPlayer({
+  mediaType,
+  tmdbId,
+  season,
+  episode,
+  showCastButton = true,
+}: Props) {
   const [serverIndex, setServerIndex] = useState(0);
   const [readyFor, setReadyFor] = useState<string | null>(null);
   const [failedFor, setFailedFor] = useState<string | null>(null);
@@ -136,6 +144,14 @@ export default function VideoPlayer({ mediaType, tmdbId, season, episode }: Prop
               onLoad={handleLoad}
               onError={handleError}
             />
+            {status === "ready" && showCastButton && (
+              <CastToTvButton
+                mediaType={mediaType}
+                tmdbId={tmdbId}
+                season={season}
+                episode={episode}
+              />
+            )}
             {status === "ready" && canFullscreen && (
               <button
                 type="button"

@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Venus</string>
+    <string name="registering">Getting your code…</string>
+    <string name="connecting">Connecting…</string>
+    <string name="enter_code_prompt">Go to Venus on your phone, open the TV tab, and enter this code</string>
+    <string name="connected_waiting">Connected. Pick something to watch on your phone.</string>
+    <string name="register_failed">Couldn\'t connect. Check your internet and restart the app.</string>
+</resources>

@@ -35,6 +35,11 @@ export default async function Header() {
           <Link href="/search" className="sm:hidden">
             Search
           </Link>
+          {user && (
+            <Link href="/tv" className="transition-colors hover:text-foreground">
+              TV
+            </Link>
+          )}
           {admin && (
             <Link href="/admin" className="transition-colors hover:text-foreground">
               Admin
