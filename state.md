@@ -4,24 +4,30 @@ Live progress log. Updated after every response. Newest entry on top.
 
 ---
 
-### 2026-09-21 — Fixed laggy Top 10 row scrolling + added sign-in/out loading feedback
-**Context:** user reported the horizontal scrolling on the new "Top 10" rows specifically felt laggy/not smooth (other rows weren't mentioned as a problem), then separately asked for a loading indicator on the sign-in button since it "feels unresponsive" after clicking.
+### 2026-09-21 — Added a reliable fullscreen button after diagnosing an ad-hijack on the VidSrc player
+**Context:** user reported "full screen button not working in pc" — the fullscreen control inside the video player itself wasn't working.
 
-**Investigation and fix — two real issues found:**
-1. **Oversized images.** `PosterCard`'s `sizes` attribute was hardcoded to `"(min-width: 768px) 160px, 45vw"`, tuned for the search results grid. The Top 10 row's posters only render at ~110-130px (`RankedPosterCard`'s fixed width), so the browser was requesting/decoding meaningfully larger images than needed — more decode work happening while the user is actively scrolling is a classic jank cause. Fixed by making `sizes` an optional prop on `PosterCard.tsx` (default unchanged, so every other row is unaffected) and passing a correctly-sized value from `RankedPosterCard.tsx`. Verified via network log: image requests for that row dropped from `w=384` to `w=256`.
-2. **`will-change: scroll-position` anti-pattern.** Also added (speculatively, alongside the image fix) `-webkit-overflow-scrolling: touch`, `overscroll-behavior-x: contain`, `scroll-behavior: smooth`, and `will-change: scroll-position` to the shared `.scrollbar-none` class used by every horizontal row on the site. The `will-change` addition turned out to be a real problem: applied globally across dozens of rows (all genre rows, Trending, Top Rated, New Releases, both Top 10 rows), it forces that many elements into permanent GPU compositor layers simultaneously — which increases memory pressure and can *worsen* scroll performance rather than help, especially on weaker mobile GPUs. Worse, in direct testing it caused a concrete rendering bug: the Top 10 rows' poster content was present and fully correct in the DOM (verified via `getComputedStyle`/`getBoundingClientRect` — real image, real src, opacity 1, correct position) but simply didn't paint on screen. Removed `will-change: scroll-position` entirely; kept the other three safer, standard properties.
-- **Verified live**, mobile viewport (375px): both Top 10 rows now render correctly (posters, rank numerals) and the underlying cause of the reported lag (oversized image decode load) is fixed. `npm run lint` and `npm run build` clean.
+**Investigation:**
+- Loaded the movie page live and played the video. No visible custom control bar with a fullscreen icon appeared on hover in testing.
+- Right-clicked inside the player to probe further — this triggered a **blocked popup redirect to `offer.alibaba.com`**. That's a well-known ad-hijacking pattern some free/ad-monetized streaming embeds use: intercepting clicks anywhere on the page (not just right-click) to fire popup/redirect ads instead of the actual intended action. This almost certainly explains why their own fullscreen button doesn't work reliably — a click meant for their fullscreen control very plausibly gets hijacked by the same ad script.
+- This happens entirely inside VidSrc's cross-origin iframe content, which we have zero ability to inspect or modify (Same-Origin Policy) — not something fixable from our side directly.
+- Checked our own side first, to rule out a real bug there: confirmed via the Permissions Policy API that our iframe correctly delegates the `fullscreen` feature (`allow="autoplay; encrypted-media; picture-in-picture; fullscreen"` + `allowFullScreen` were already both present and correctly recognized by the browser).
 
-**Also done — sign-in/sign-out loading feedback:**
-- New [src/components/SubmitButton.tsx](../src/components/SubmitButton.tsx): a small client component using React's `useFormStatus()` hook (only works in a child of the `<form>`, hence a separate component rather than inlining) — shows a spinner + "Signing in.../Signing out..." and disables the button while its server action is in flight.
-- Wired into `src/app/login/page.tsx` (Sign in) and `src/components/Header.tsx` (Sign out) — the latter wasn't explicitly requested but has the identical issue, so fixed both for consistency at near-zero extra cost.
-- Verified both flows still work correctly end-to-end after the change (sign-in → role-based redirect, sign-out → `/login`). The transient pending frame is too fast to catch in a screenshot on localhost, but the mechanism is React's standard, reliable pattern for this and will show clearly under any real network latency — exactly the scenario that prompted the request.
-- Updated `plan.md` (Phase 4 entry for the scrolling fix, new entry for the loading-state fix).
+**Fix — added our own fullscreen control that never touches VidSrc's UI:**
+- `src/components/player/VideoPlayer.tsx`: added a ⛶ button overlaid on the bottom-right of the player. It calls `requestFullscreen()` directly on our own container `<div>` (which wraps the iframe) from a genuine click on our own page — this fullscreens the whole player including whatever's inside the iframe, without ever needing to click anything inside VidSrc's own content. Toggles to an exit icon via the `fullscreenchange` event listener. Added a small hint text next to the server buttons ("Use the ⛶ button on the player for a reliable fullscreen.", hidden on mobile to save space) so users know it's there and why.
+- Wrapped `requestFullscreen()`/`exitFullscreen()` calls in `.catch(() => {})` for resilience.
+
+**Verification — hit a real limitation of the testing tool itself:**
+- Clicking the new button in the automated browser tool didn't visibly enter fullscreen. Investigated directly: calling `requestFullscreen()` via the tool on our page returned `TypeError: Permissions check failed`.
+- To rule out a bug in our code, tested the *exact same call* (`document.body.requestFullscreen()`) on a totally unrelated page (`example.com`, no iframe, nothing to do with our app) in the same browser pane — it failed with the identical error. This proves the restriction is in the testing tool's own embedded preview pane (which apparently doesn't have fullscreen permission itself, so nothing rendered inside it can use the Fullscreen API, regardless of what any page does), not something specific to our implementation.
+- The code itself is the standard, MDN-documented Fullscreen API pattern and should work correctly in a real browser tab (which is what the user actually uses) — this could not be given a full green-light confirmation, only a strong logical one, since the tool itself can't verify it.
+- `npm run lint` and `npm run build` both clean.
+- Updated `plan.md` (Phase 6 entry) with the full investigation writeup, including the ad-hijack finding as a heads-up about the third-party embed's behavior.
 
 **Not started yet:**
-- Haven't pushed these fixes to GitHub yet — about to.
-- Still waiting on user confirmation about the earlier "mobile not fitting" report (separate issue) and whether it's resolved.
+- Haven't pushed this fix to GitHub yet — about to.
+- Would be good to get user confirmation once deployed that the new ⛶ button actually works for them, since this couldn't be end-to-end verified here.
 - Phase 11 (network/IP lockdown) remains deliberately deferred.
 
 **Next step:**
-- Commit and push both fixes.
+- Commit and push, then ask the user to confirm the fullscreen button works once live.
