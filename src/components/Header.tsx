@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { isAdminUser } from "@/lib/admin";
 import { signOut } from "@/app/login/actions";
 
 export default async function Header() {
@@ -7,6 +8,8 @@ export default async function Header() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  const admin = user ? await isAdminUser(user.id) : false;
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-background/80 backdrop-blur">
@@ -31,6 +34,11 @@ export default async function Header() {
           <Link href="/search" className="sm:hidden">
             Search
           </Link>
+          {admin && (
+            <Link href="/admin" className="transition-colors hover:text-foreground">
+              Admin
+            </Link>
+          )}
           {user && (
             <form action={signOut}>
               <button type="submit" className="transition-colors hover:text-foreground">

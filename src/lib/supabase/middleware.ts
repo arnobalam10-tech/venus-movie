@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isAdminUser } from "@/lib/admin";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -45,8 +46,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && pathname.startsWith("/login")) {
+    const admin = await isAdminUser(user.id);
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = admin ? "/admin" : "/";
     return NextResponse.redirect(url);
   }
 

@@ -4,32 +4,30 @@ Live progress log. Updated after every response. Newest entry on top.
 
 ---
 
-### 2026-09-20 — Signup removed entirely; admin panel gets a Users list with credentials
-**Context:** user raised two things mid-session: (1) realized self-signup meant users could get into the site without admin control, initially asked about an approval workflow, then changed direction to "no signups, only I can create users, remove signups completely"; (2) reported "the signin button doesnt redirect to the website" — most likely explained by the old signup flow requiring email confirmation before login worked (which is now moot).
+### 2026-09-20 — Live on Vercel; fixed admin routing after production feedback
+**Context:** user connected Vercel themselves (imported `.env` directly) and shared the live URL: **https://venus-movie.vercel.app**. Reported sign-in "stuck" and being unable to reach `/admin` even as `admin@admin.com`; suggested a separate admin login.
 
-**Done:**
-- **Removed self-signup completely**, per explicit instruction:
-  - `/login` is now sign-in only — removed the sign-up toggle/form from `src/app/login/page.tsx`.
-  - Removed the `signUp` server action from `src/app/login/actions.ts`.
-  - Deleted `src/app/auth/callback/` (the email-confirmation redirect handler — no longer needed since every account is now created pre-confirmed via the admin panel).
-  - Simplified `src/lib/supabase/middleware.ts`'s route checks accordingly (no more `/auth` exception needed).
-  - Verified sign-in still correctly redirects to `/` after these changes (confirms the original "doesn't redirect" report was tied to the now-removed signup/confirmation flow, not a bug in sign-in itself).
-- **Added a Users list to the admin panel**, after clarifying a real constraint with the user first: Supabase never exposes a password after it's set (one-way hashing) — true for every provider, not a gap in our code. Presented two options; user chose to store plaintext passwords **only for accounts created through the admin panel** (single-add or CSV import), in a new locked-down table, so the admin can look them up later. Since self-signup is now removed entirely, this means going forward every account will have a known password.
-  - New table `admin_created_credentials` (`user_id`, `email`, `password`, `created_at`), RLS locked to service-role only — same pattern as `admin_users`/`allowed_ips`.
-  - `addUser` and `importCsv` in `src/app/admin/actions.ts` now write to this table on successful creation.
-  - New `src/components/admin/UsersList.tsx`: lists every account (via `supabase.auth.admin.listUsers()`) with email, password (from the credentials table when known, `—` otherwise), and created date, newest first.
-  - Backfilled a credentials row for `admin@admin.com` (created earlier via direct API, before this table existed) via SQL so it shows correctly.
-- **Verified live in the browser:** confirmed `/login` shows sign-in only; logged in as `admin@admin.com` and confirmed the redirect to `/` works; `/admin` → Users list showed all 4 existing accounts correctly (password shown for `admin@admin.com`, `—` for the two pre-existing self-signup accounts); added a new user through the form and confirmed it appeared instantly with its password, no manual refresh needed; cleaned up the test account afterward.
-- Cleared a stale `.next` type-cache error (referenced the deleted callback route) — `npx tsc --noEmit`, `npm run lint`, and `npm run build` all clean afterward.
-- Updated `PRD.md` (§4 Authentication rewritten for admin-only accounts, §9 Admin Panel extended with the Users list + `admin_created_credentials` schema, §7 route description updated) and `plan.md` (Phase 2 and Phase 9 both updated to reflect what was removed/added and why).
-- Committed and pushed to GitHub (continuing from the earlier-authorized push to this repo): signup removal + Users list feature.
+**Diagnosis (tested directly against the live URL):**
+- Opened the production site fresh: confirmed the deployed build has the latest code (sign-in only, no signup toggle).
+- Signed in as `admin@admin.com` → worked correctly, redirected to home with real data (Jump Back In, hero, etc. all rendering from production Supabase + TMDB).
+- Navigated to `/admin` directly → worked correctly, Users list populated.
+- Signed out → worked correctly, back to `/login`.
+- So the deployment itself was healthy. The user's earlier "stuck" experience was traced to two separate things: (1) they'd tested `/admin` while logged in as `nafisa@venus.com`, a non-admin self-signup account from before signups were removed — being blocked was correct, not a bug; (2) admin sign-in landed on the homepage like any other account, with no visible link to `/admin` anywhere — so it looked broken even though it technically worked if you knew to type the URL.
 
-**Full app status:** every core feature is built, verified, and pushed. Auth is now closed/admin-only end to end (no signup surface at all). Admin panel: add single user, CSV bulk import, sample CSV download, and a full Users list with credentials for admin-created accounts.
+**Fix (no separate admin login needed — the existing single-login system already knows who's an admin):**
+- Refactored `src/lib/admin.ts`: extracted `isAdminUser(userId)` as a standalone check (was previously buried inside `requireAdmin()`), so it can be reused without re-fetching the current user.
+- `src/app/login/actions.ts`: `signIn` now checks `isAdminUser()` after a successful login and redirects to `/admin` instead of `/` for admins.
+- `src/components/Header.tsx`: shows a visible "Admin" link (next to Sign out) whenever the logged-in user is an admin, so there's always a way back to the panel.
+- `src/lib/supabase/middleware.ts`: the proxy's "already logged in, visiting /login" redirect is now admin-aware too, for consistency.
+- Revoked admin access from `moazzir.ch+venustest@gmail.com` — that account had only been granted admin during this session's own Phase 9 testing and isn't meant to be a real admin; it was incidentally still marked admin in the database and would have redirected to `/admin` on sign-in, which would have been confusing.
+- **Verified all three cases live locally:** admin sign-in → lands directly on `/admin`, "Admin" link visible in header; revoked-admin account sign-in → lands on `/`, no "Admin" link, `/admin` inaccessible. `npm run build` clean.
+- Updated `plan.md` (Phase 9 gets the routing-fix note, Phase 10 marked ✅ live with the production smoke-test results and root-cause explanation).
 
-**Not started yet / still needs the user:**
-- Vercel connection — same as before, needs the user (no `vercel` CLI here). They mentioned importing the `.env` file directly into Vercel, which covers the key part of this step.
-- Once deployed: `NEXT_PUBLIC_SITE_URL` should be updated to the real production URL, and a production smoke test should be run.
+**Full app status:** live in production at https://venus-movie.vercel.app, all core features working, admin routing now matches expectations (admin lands in the admin panel, regular accounts land in the app, no separate login surface needed).
+
+**Not started yet:**
+- Haven't pushed this latest fix to GitHub yet — about to.
 - Phase 11 (network/IP lockdown) remains deliberately deferred.
 
 **Next step:**
-- Waiting on the user to finish the Vercel connection and share the live URL for a production smoke test.
+- Commit and push the admin-routing fix, then confirm with the user that production now behaves as expected once Vercel redeploys.
