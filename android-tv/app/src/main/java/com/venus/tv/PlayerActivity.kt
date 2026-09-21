@@ -81,16 +81,15 @@ class PlayerActivity : AppCompatActivity() {
 
         currentIssuedAt = intent.getStringExtra(EXTRA_ISSUED_AT)
         loadFromIntent()
-    }
 
-    override fun onResume() {
-        super.onResume()
+        // See MainActivity for why this runs for the Activity's full
+        // lifetime rather than being tied to onResume/onPause.
         polling = true
         handler.postDelayed(pollRunnable, POLL_INTERVAL_MS)
     }
 
-    override fun onPause() {
-        super.onPause()
+    override fun onDestroy() {
+        super.onDestroy()
         polling = false
         handler.removeCallbacks(pollRunnable)
     }

@@ -35,17 +35,19 @@ class MainActivity : AppCompatActivity() {
         } else {
             statusText.text = getString(R.string.connecting)
         }
-    }
 
-    override fun onResume() {
-        super.onResume()
-        lastIssuedAt = null
+        // Poll for the lifetime of this Activity instance, not just while
+        // it's resumed/foreground. This app is meant to sit idle waiting
+        // for a cast — tying the loop to onResume/onPause means anything
+        // that takes focus away (switching tabs/windows to go cast from,
+        // a host environment's own focus quirks) stops it right when a
+        // cast is most likely to arrive.
         polling = true
         handler.post(pollRunnable)
     }
 
-    override fun onPause() {
-        super.onPause()
+    override fun onDestroy() {
+        super.onDestroy()
         polling = false
         handler.removeCallbacks(pollRunnable)
     }

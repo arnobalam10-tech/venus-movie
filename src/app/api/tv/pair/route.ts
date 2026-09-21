@@ -43,6 +43,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "That code has expired. Refresh the code on your TV." }, { status: 410 });
   }
 
+  // Enforce one paired TV per account (v1 design assumption — see PRD §13.2 —
+  // but never actually enforced here before). Without this, re-pairing a
+  // second device leaves the first one orphaned: still showing "Connected"
+  // on its screen, but /api/tv/cast always targets whichever device was
+  // paired most recently, so the orphaned one silently never receives
+  // anything cast to it again.
+  await admin.from("tv_devices").delete().eq("user_id", user.id).neq("id", pending.id);
+
   const { error: updateError } = await admin
     .from("tv_devices")
     .update({ user_id: user.id, paired_at: new Date().toISOString(), pairing_code: null })
