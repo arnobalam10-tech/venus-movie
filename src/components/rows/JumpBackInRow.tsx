@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getDetails, type MediaType } from "@/lib/tmdb";
 import { normalize, type MediaItem } from "@/lib/media";
-import Row from "@/components/Row";
+import JumpBackInList from "@/components/rows/JumpBackInList";
 
 interface WatchHistoryRow {
   media_type: MediaType;
@@ -50,5 +50,5 @@ export default async function JumpBackInRow() {
 
   if (items.length === 0) return null;
 
-  return <Row title="Jump Back In" items={items} />;
+  return <JumpBackInList initialItems={items} />;
 }
