@@ -51,7 +51,7 @@ export default function CastToTvButton({ mediaType, tmdbId, season, episode }: P
       disabled={status === "casting"}
       title={status === "error" ? "Couldn't cast — try again" : "Cast to TV"}
       aria-label="Cast to TV"
-      className="absolute bottom-3 left-3 z-20 rounded-md bg-black/70 p-2 text-white opacity-80 transition-opacity hover:opacity-100 disabled:opacity-50"
+      className="absolute right-3 top-3 z-20 rounded-md bg-black/70 p-2 text-white opacity-80 transition-opacity hover:opacity-100 disabled:opacity-50"
     >
       {status === "sent" ? (
         <svg
