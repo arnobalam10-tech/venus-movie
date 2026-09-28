@@ -1,6 +1,7 @@
 export const VIDSRC_SERVERS = [
   { id: 1, label: "Server 1", domain: "vidsrc.to" },
   { id: 2, label: "Server 2", domain: "vidsrc.sh" },
+  { id: 3, label: "Server 3", domain: "vidsrc.pm" },
 ] as const;
 
 export function vidsrcMovieUrl(domain: string, tmdbId: number | string) {
