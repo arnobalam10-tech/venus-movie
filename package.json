@@ -16,6 +16,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@csstools/postcss-cascade-layers": "^6.0.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -24,5 +25,13 @@
     "eslint-config-next": "16.3.5",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "browserslist": [
+    "chrome 111",
+    "edge 111",
+    "firefox 111",
+    "safari 16.4",
+    "ios_saf 12",
+    "safari 12"
+  ]
 }
