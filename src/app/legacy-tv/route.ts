@@ -90,7 +90,7 @@ html,body{margin:0;height:100%;background:#000;color:#fff;font-family:-apple-sys
     var path = c.mediaType === "tv"
       ? "/tv-embed/tv/" + c.tmdbId + "/" + (c.season || 1) + "/" + (c.episode || 1)
       : "/tv-embed/movie/" + c.tmdbId;
-    return path + "?token=" + encodeURIComponent(c.viewToken);
+    return path + "?token=" + encodeURIComponent(c.viewToken) + (c.server ? "&server=" + c.server : "");
   }
 
   function poll() {

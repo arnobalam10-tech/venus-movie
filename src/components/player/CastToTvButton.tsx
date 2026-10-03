@@ -8,9 +8,10 @@ interface Props {
   tmdbId: number;
   season?: number;
   episode?: number;
+  server?: number;
 }
 
-export default function CastToTvButton({ mediaType, tmdbId, season, episode }: Props) {
+export default function CastToTvButton({ mediaType, tmdbId, season, episode, server }: Props) {
   const [paired, setPaired] = useState(false);
   const [status, setStatus] = useState<"idle" | "casting" | "sent" | "error">("idle");
 
@@ -35,7 +36,7 @@ export default function CastToTvButton({ mediaType, tmdbId, season, episode }: P
       const res = await fetch("/api/tv/cast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mediaType, tmdbId, season, episode }),
+        body: JSON.stringify({ mediaType, tmdbId, season, episode, server }),
       });
       setStatus(res.ok ? "sent" : "error");
     } catch {

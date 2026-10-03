@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   const { data: device, error } = await admin
     .from("tv_devices")
     .select(
-      "paired_at, cast_media_type, cast_tmdb_id, cast_season, cast_episode, cast_issued_at",
+      "paired_at, cast_media_type, cast_tmdb_id, cast_season, cast_episode, cast_server, cast_issued_at",
     )
     .eq("device_token", deviceToken)
     .maybeSingle();
@@ -52,6 +52,7 @@ export async function GET(request: Request) {
       tmdbId: device.cast_tmdb_id,
       season: device.cast_season,
       episode: device.cast_episode,
+      server: device.cast_server,
       issuedAt: device.cast_issued_at,
       viewToken,
     },

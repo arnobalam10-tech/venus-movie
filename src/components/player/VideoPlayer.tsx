@@ -12,6 +12,8 @@ interface Props {
   episode?: number;
   showCastButton?: boolean;
   initialServer?: number;
+  // Query params the server links must carry (e.g. a cast access token).
+  linkQuery?: string;
 }
 
 const LOAD_TIMEOUT_MS = 12000;
@@ -29,6 +31,7 @@ export default function VideoPlayer({
   episode,
   showCastButton = true,
   initialServer,
+  linkQuery,
 }: Props) {
   const [serverIndex, setServerIndex] = useState(() =>
     Math.max(
@@ -162,6 +165,7 @@ export default function VideoPlayer({
                 tmdbId={tmdbId}
                 season={season}
                 episode={episode}
+                server={server.id}
               />
             )}
             {status === "ready" && canFullscreen && (
@@ -215,7 +219,7 @@ export default function VideoPlayer({
           // (very old Safari); with JS the click is handled in place.
           <a
             key={s.id}
-            href={`?server=${s.id}`}
+            href={`?${linkQuery ? `${linkQuery}&` : ""}server=${s.id}`}
             onClick={(e) => {
               e.preventDefault();
               setServerIndex(i);

@@ -9,12 +9,16 @@ data class CastInfo(
     val episode: Int?,
     val viewToken: String,
     val issuedAt: String,
+    val server: Int? = null,
 ) {
     val embedUrl: String
-        get() = if (mediaType == "tv") {
-            "${BuildConfig.BASE_URL}/tv-embed/tv/$tmdbId/${season ?: 1}/${episode ?: 1}?token=$viewToken"
-        } else {
-            "${BuildConfig.BASE_URL}/tv-embed/movie/$tmdbId?token=$viewToken"
+        get() {
+            val serverParam = if (server != null) "&server=$server" else ""
+            return if (mediaType == "tv") {
+                "${BuildConfig.BASE_URL}/tv-embed/tv/$tmdbId/${season ?: 1}/${episode ?: 1}?token=$viewToken$serverParam"
+            } else {
+                "${BuildConfig.BASE_URL}/tv-embed/movie/$tmdbId?token=$viewToken$serverParam"
+            }
         }
 
     companion object {
@@ -33,6 +37,7 @@ data class CastInfo(
                 episode = if (json.isNull("episode")) null else json.optInt("episode"),
                 viewToken = viewToken,
                 issuedAt = issuedAt,
+                server = if (json.isNull("server")) null else json.optInt("server"),
             )
         }
     }

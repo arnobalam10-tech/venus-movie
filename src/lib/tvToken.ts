@@ -10,7 +10,9 @@ export interface CastPayload {
   exp: number;
 }
 
-const TOKEN_TTL_MS = 10 * 60 * 1000;
+// Long enough that tapping a server link (a full page load on devices
+// without JS) still works late into a movie.
+const TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
 
 function base64url(input: Buffer | string) {
   return Buffer.from(input).toString("base64url");

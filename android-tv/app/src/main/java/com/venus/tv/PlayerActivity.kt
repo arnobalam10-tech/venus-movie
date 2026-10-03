@@ -124,7 +124,8 @@ class PlayerActivity : AppCompatActivity() {
         val episode = if (intent.hasExtra(EXTRA_EPISODE)) intent.getIntExtra(EXTRA_EPISODE, 1) else null
         val issuedAt = intent.getStringExtra(EXTRA_ISSUED_AT).orEmpty()
 
-        val cast = CastInfo(mediaType, tmdbId, season, episode, viewToken, issuedAt)
+        val server = if (intent.hasExtra(EXTRA_SERVER)) intent.getIntExtra(EXTRA_SERVER, 1) else null
+        val cast = CastInfo(mediaType, tmdbId, season, episode, viewToken, issuedAt, server)
         webView.loadUrl(cast.embedUrl)
     }
 
@@ -152,6 +153,7 @@ class PlayerActivity : AppCompatActivity() {
         const val EXTRA_EPISODE = "episode"
         const val EXTRA_VIEW_TOKEN = "viewToken"
         const val EXTRA_ISSUED_AT = "issuedAt"
+        const val EXTRA_SERVER = "server"
         private const val POLL_INTERVAL_MS = 3000L
     }
 }

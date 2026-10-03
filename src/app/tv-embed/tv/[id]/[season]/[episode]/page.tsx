@@ -6,10 +6,10 @@ export default async function TvEmbedEpisodePage({
   searchParams,
 }: {
   params: Promise<{ id: string; season: string; episode: string }>;
-  searchParams: Promise<{ token?: string }>;
+  searchParams: Promise<{ token?: string; server?: string }>;
 }) {
   const { id, season, episode } = await params;
-  const { token } = await searchParams;
+  const { token, server } = await searchParams;
   const tmdbId = Number(id);
   const seasonNumber = Number(season);
   const episodeNumber = Number(episode);
@@ -39,6 +39,8 @@ export default async function TvEmbedEpisodePage({
           season={seasonNumber}
           episode={episodeNumber}
           showCastButton={false}
+          initialServer={Number(server)}
+          linkQuery={`token=${encodeURIComponent(token ?? "")}`}
         />
       </div>
     </div>

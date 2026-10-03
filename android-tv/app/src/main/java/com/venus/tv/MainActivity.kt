@@ -104,6 +104,7 @@ class MainActivity : AppCompatActivity() {
                             cast.episode?.let { putExtra(PlayerActivity.EXTRA_EPISODE, it) }
                             putExtra(PlayerActivity.EXTRA_VIEW_TOKEN, cast.viewToken)
                             putExtra(PlayerActivity.EXTRA_ISSUED_AT, cast.issuedAt)
+                            cast.server?.let { putExtra(PlayerActivity.EXTRA_SERVER, it) }
                         },
                     )
                 }

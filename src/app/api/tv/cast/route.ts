@@ -18,6 +18,7 @@ export async function POST(request: Request) {
   const tmdbId = Number(body?.tmdbId);
   const season = body?.season != null ? Number(body.season) : undefined;
   const episode = body?.episode != null ? Number(body.episode) : undefined;
+  const server = Number.isInteger(body?.server) && body.server > 0 ? Number(body.server) : null;
 
   if ((mediaType !== "movie" && mediaType !== "tv") || !Number.isFinite(tmdbId)) {
     return NextResponse.json({ error: "Invalid cast request" }, { status: 400 });
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
       cast_tmdb_id: tmdbId,
       cast_season: season ?? null,
       cast_episode: episode ?? null,
+      cast_server: server,
       cast_issued_at: new Date().toISOString(),
     })
     .eq("id", device.id);
