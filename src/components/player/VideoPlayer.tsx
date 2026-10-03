@@ -33,6 +33,10 @@ export default function VideoPlayer({
   const [failedFor, setFailedFor] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [canFullscreen, setCanFullscreen] = useState(false);
+  // The loading overlay is removed by JS on iframe load. Only show it once JS
+  // is actually running, so a browser where hydration fails (very old Safari)
+  // sees the player instead of a spinner stuck on top of it forever.
+  const [mounted, setMounted] = useState(false);
   const readyRef = useRef<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<FullscreenCapableElement>(null);
@@ -80,6 +84,7 @@ export default function VideoPlayer({
     // native video controls handle fullscreen on those platforms.
     queueMicrotask(() => {
       setCanFullscreen(typeof document !== "undefined" && document.fullscreenEnabled === true);
+      setMounted(true);
     });
   }, []);
 
@@ -128,7 +133,7 @@ export default function VideoPlayer({
           </div>
         ) : (
           <>
-            {status === "loading" && (
+            {status === "loading" && mounted && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-accent" />
               </div>
