@@ -49,6 +49,7 @@ export async function updateSession(request: NextRequest) {
   const isPublicRoute =
     isLoginRoute ||
     pathname.startsWith("/tv-embed") ||
+    pathname.startsWith("/legacy-tv") ||
     pathname === "/api/tv/register" ||
     pathname === "/api/tv/poll";
 
