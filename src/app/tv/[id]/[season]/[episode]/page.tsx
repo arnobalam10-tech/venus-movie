@@ -35,10 +35,13 @@ export async function generateMetadata({
 
 export default async function EpisodePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; season: string; episode: string }>;
+  searchParams: Promise<{ server?: string }>;
 }) {
   const { id, season, episode } = await params;
+  const { server } = await searchParams;
   const data = await loadEpisode(id, season, episode);
   if (!data) notFound();
   const { tvId, seasonNumber, episodeNumber, details, episodes } = data;
@@ -53,7 +56,13 @@ export default async function EpisodePage({
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
-      <VideoPlayer mediaType="tv" tmdbId={tvId} season={seasonNumber} episode={episodeNumber} />
+      <VideoPlayer
+        mediaType="tv"
+        tmdbId={tvId}
+        season={seasonNumber}
+        episode={episodeNumber}
+        initialServer={Number(server)}
+      />
 
       <div className="mt-6 flex items-center justify-between gap-3">
         {prevEpisode ? (

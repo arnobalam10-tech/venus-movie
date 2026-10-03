@@ -28,10 +28,13 @@ export async function generateMetadata({
 
 export default async function MoviePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ server?: string }>;
 }) {
   const { id } = await params;
+  const { server } = await searchParams;
   const movie = await loadMovie(id);
   if (!movie) notFound();
   const { tmdbId, details } = movie;
@@ -43,7 +46,7 @@ export default async function MoviePage({
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
-      <VideoPlayer mediaType="movie" tmdbId={tmdbId} />
+      <VideoPlayer mediaType="movie" tmdbId={tmdbId} initialServer={Number(server)} />
 
       <div className="mt-8">
         <h1 className="text-2xl font-bold text-foreground sm:text-3xl">{details.title}</h1>

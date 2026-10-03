@@ -11,6 +11,7 @@ interface Props {
   season?: number;
   episode?: number;
   showCastButton?: boolean;
+  initialServer?: number;
 }
 
 const LOAD_TIMEOUT_MS = 12000;
@@ -27,8 +28,14 @@ export default function VideoPlayer({
   season,
   episode,
   showCastButton = true,
+  initialServer,
 }: Props) {
-  const [serverIndex, setServerIndex] = useState(0);
+  const [serverIndex, setServerIndex] = useState(() =>
+    Math.max(
+      0,
+      VIDSRC_SERVERS.findIndex((s) => s.id === initialServer),
+    ),
+  );
   const [readyFor, setReadyFor] = useState<string | null>(null);
   const [failedFor, setFailedFor] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -204,10 +211,15 @@ export default function VideoPlayer({
 
       <div className="mt-3 flex items-center gap-2">
         {VIDSRC_SERVERS.map((s, i) => (
-          <button
+          // A real link so switching servers also works when JS can't run
+          // (very old Safari); with JS the click is handled in place.
+          <a
             key={s.id}
-            type="button"
-            onClick={() => setServerIndex(i)}
+            href={`?server=${s.id}`}
+            onClick={(e) => {
+              e.preventDefault();
+              setServerIndex(i);
+            }}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
               i === serverIndex
                 ? "bg-gradient-to-r from-accent to-accent-2 text-white"
@@ -215,7 +227,7 @@ export default function VideoPlayer({
             }`}
           >
             {s.label}
-          </button>
+          </a>
         ))}
         {canFullscreen && (
           <span className="ml-1 hidden text-xs text-muted sm:inline">
