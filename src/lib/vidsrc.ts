@@ -1,7 +1,7 @@
 export const VIDSRC_SERVERS = [
-  { id: 1, label: "Server 1", domain: "vidsrc.pm" },
-  { id: 2, label: "Server 2", domain: "vidsrc.sh" },
-  { id: 3, label: "Server 3", domain: "vidsrc.to" },
+  { id: 1, label: "Server 1", domain: "vidsrc.sh" },
+  { id: 2, label: "Server 2", domain: "vidsrc.to" },
+  { id: 3, label: "Server 3", domain: "vidsrc.pm" },
   { id: 4, label: "Server 4", domain: "vidsrc.su" },
 ] as const;
 
